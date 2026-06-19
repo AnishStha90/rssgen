@@ -6,6 +6,7 @@ python-dateutil
 apscheduler
 psycopg2-binary
 gunicorn
+python-dotenv
 
 # Optional: Google Drive image upload support
 # google-api-python-client

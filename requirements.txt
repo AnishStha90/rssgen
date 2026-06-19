@@ -1,0 +1,12 @@
+flask
+requests
+beautifulsoup4
+lxml
+python-dateutil
+apscheduler
+psycopg2-binary
+gunicorn
+
+# Optional: Google Drive image upload support
+# google-api-python-client
+# google-auth

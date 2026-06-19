@@ -1,0 +1,2998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RSS/gen — Live News Feed Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #05060a;
+      --s1:     #0a0e18;
+      --s2:     #0f1423;
+      --bdr:    #181f34;
+      --bdr2:   #222d48;
+      --acc:    #4fffb0;
+      --acc2:   #00cc7d;
+      --red:    #ff4560;
+      --amber:  #ffb627;
+      --blue:   #4aa8ff;
+      --purple: #a78bfa;
+      --text:   #d8e0f0;
+      --muted:  #5a6580;
+      --faint:  #1a2238;
+      --mono:   'IBM Plex Mono', monospace;
+      --sans:   'Inter', sans-serif;
+      --glow:   rgba(79,255,176,.08);
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); display: flex; flex-direction: column; }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 800px 500px at 20% 0%, rgba(79,255,176,.04) 0%, transparent 60%),
+        radial-gradient(ellipse 600px 400px at 80% 100%, rgba(74,168,255,.03) 0%, transparent 60%);
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: linear-gradient(rgba(79,255,176,.012) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(79,255,176,.012) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    .topbar {
+      flex-shrink: 0; height: 56px; position: relative; z-index: 200;
+      background: rgba(5,6,10,.97); backdrop-filter: blur(24px);
+      border-bottom: 1px solid var(--bdr);
+      display: flex; align-items: center; padding: 0 1.1rem; gap: .85rem;
+      box-shadow: 0 1px 0 rgba(79,255,176,.06);
+    }
+    .logo { font-family: var(--mono); font-size: .85rem; font-weight: 600; color: var(--acc); display: flex; align-items: center; gap: .45rem; flex-shrink: 0; user-select: none; letter-spacing: -.02em; }
+    .lpulse { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 10px var(--acc), 0 0 20px rgba(79,255,176,.4); animation: pulse 1.6s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.25;transform:scale(.65)} }
+    /* ── Scrape UI (hidden for reporters) ── */
+    .url-row { flex: 1; display: flex; align-items: center; gap: .6rem; min-width: 0; }
+    .url-wrap {
+      flex: 1; max-width: 700px; display: flex; align-items: center;
+      background: var(--s1); border: 1px solid var(--bdr2); border-radius: 12px;
+      padding: 0 .4rem 0 .9rem; gap: .3rem; transition: border-color .2s, box-shadow .2s;
+    }
+    .url-wrap:focus-within { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(79,255,176,.1), 0 0 20px rgba(79,255,176,.06); }
+    #quickUrl {
+      flex: 1; background: transparent; border: none; outline: none;
+      font-family: var(--mono); font-size: .78rem; color: var(--text); padding: .5rem 0;
+    }
+    #quickUrl::placeholder { color: var(--muted); }
+    .url-hint { font-family: var(--mono); font-size: .58rem; color: var(--muted); background: var(--s2); border: 1px solid var(--bdr); border-radius: 5px; padding: .18rem .42rem; white-space: nowrap; flex-shrink: 0; }
+    .btn-scrape {
+      padding: .42rem 1rem; background: var(--acc); color: var(--bg);
+      border: none; border-radius: 10px; font-family: var(--mono); font-weight: 700; font-size: .76rem;
+      cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: .3rem; white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 0 0 0 rgba(79,255,176,.4);
+    }
+    .btn-scrape:hover { background: #6bffc0; box-shadow: 0 4px 20px rgba(79,255,176,.4); transform: translateY(-1px); }
+    .btn-scrape:active { transform: translateY(0); }
+    .btn-scrape:disabled { opacity: .4; pointer-events: none; }
+    .btn-bulk {
+      padding: .42rem .85rem; background: var(--faint); color: var(--muted);
+      border: 1px solid var(--bdr2); border-radius: 10px; font-family: var(--mono); font-size: .72rem;
+      cursor: pointer; transition: all .18s; white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-bulk:hover { color: var(--text); border-color: var(--acc); background: rgba(79,255,176,.05); transform: translateY(-1px); }
+    .topbar-right { display: flex; align-items: center; gap: .7rem; margin-left: auto; flex-shrink: 0; }
+    .user-badge { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; font-family: var(--mono); }
+    .user-name { font-size: .68rem; color: var(--text); font-weight: 700; }
+    .user-role { font-size: .58rem; color: var(--acc); text-transform: uppercase; letter-spacing: .06em; }
+    .auto-badge { display: flex; align-items: center; gap: .35rem; font-family: var(--mono); font-size: .62rem; color: var(--muted); background: var(--s2); border: 1px solid var(--bdr); border-radius: 7px; padding: .24rem .65rem; }
+    .auto-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 6px var(--acc); }
+    #statusLbl { font-family: var(--mono); font-size: .62rem; color: var(--muted); min-width: 36px; text-align: right; }
+
+    .layout { flex: 1; display: grid; grid-template-columns: 268px 1fr 318px; overflow: hidden; position: relative; z-index: 1; }
+    .panel { display: flex; flex-direction: column; overflow: hidden; }
+    .panel-head {
+      flex-shrink: 0; padding: .6rem 1rem;
+      border-bottom: 1px solid var(--bdr);
+      display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+      background: rgba(10,14,24,.6);
+    }
+    .ph-left { display: flex; align-items: center; gap: .5rem; }
+    .ph-title { font-family: var(--mono); font-size: .58rem; font-weight: 700; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+    .ph-badge { background: rgba(79,255,176,.12); color: var(--acc); border: 1px solid rgba(79,255,176,.25); border-radius: 8px; padding: .06rem .45rem; font-family: var(--mono); font-size: .6rem; font-weight: 700; }
+    .ph-live { display: flex; align-items: center; gap: .3rem; font-family: var(--mono); font-size: .58rem; color: var(--red); }
+    .ph-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: pulse .9s infinite; }
+
+    .panel-left { background: linear-gradient(180deg, var(--s1) 0%, rgba(10,14,24,.98) 100%); border-right: 1px solid var(--bdr); }
+    .feed-list { flex: 1; overflow-y: auto; }
+    .feed-list::-webkit-scrollbar { width: 3px; }
+    .feed-list::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+    .fi {
+      padding: .7rem 1rem; border-bottom: 1px solid var(--bdr);
+      cursor: pointer; transition: background .14s; position: relative;
+    }
+    .fi:hover { background: rgba(79,255,176,.025); }
+    .fi.active { background: rgba(79,255,176,.04); border-left: 2px solid var(--acc); padding-left: calc(1rem - 2px); }
+    .fi.error  { border-left: 2px solid var(--red); padding-left: calc(1rem - 2px); }
+    .fi.refreshing { background: rgba(79,255,176,.03); }
+    .fi.fi-paused { opacity: .45; }
+    .fi.fi-paused .fi-dot { background: var(--muted) !important; box-shadow: none !important; }
+    .fi-r1 { display: flex; align-items: center; gap: .45rem; margin-bottom: .22rem; }
+    .fi-fav { width: 18px; height: 18px; border-radius: 3px; background: var(--faint); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: .65rem; }
+    .fi-fav img { width: 100%; height: 100%; object-fit: cover; }
+    .fi-name { font-size: .77rem; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fi-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .fi-dot.ok { background: var(--acc); box-shadow: 0 0 5px var(--acc); }
+    .fi-dot.error { background: var(--red); }
+    .fi-dot.refreshing { background: var(--amber); animation: pulse 1s infinite; }
+    .fi-r2 { font-family: var(--mono); font-size: .6rem; color: var(--muted); display: flex; gap: .35rem; align-items: center; margin-bottom: .32rem; }
+    .fi-cnt { color: var(--acc); font-weight: 700; }
+    .fi-new-badge { background: rgba(79,255,176,.15); color: var(--acc); border: 1px solid rgba(79,255,176,.3); border-radius: 3px; padding: .02rem .3rem; font-size: .55rem; font-weight: 700; animation: fadeIn .3s ease; }
+    .fi-acts { display: flex; gap: .2rem; }
+    .btiny {
+      font-family: var(--mono); font-size: .58rem; padding: .1rem .38rem;
+      border-radius: 5px; background: transparent; border: 1px solid var(--bdr);
+      color: var(--muted); cursor: pointer; transition: all .12s;
+    }
+    .btiny:hover { border-color: var(--acc); color: var(--acc); background: rgba(79,255,176,.05); }
+    .btiny.del:hover { border-color: var(--red); color: var(--red); background: rgba(255,69,96,.05); }
+    .empty-feeds { padding: 2rem 1rem; text-align: center; font-family: var(--mono); font-size: .68rem; color: var(--muted); line-height: 2.2; }
+
+    .mn-card { background: rgba(15,20,35,.8); border: 1px solid var(--bdr); border-radius: 7px; padding: .4rem .5rem; transition: border-color .15s, box-shadow .15s; }
+    .mn-card:hover { border-color: rgba(79,255,176,.3); box-shadow: 0 2px 12px rgba(79,255,176,.05); }
+    .mn-card-title { font-size: .62rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: .15rem; }
+    .mn-card-meta { font-size: .52rem; color: var(--dim); display: flex; gap: .25rem; flex-wrap: wrap; align-items: center; }
+    .mn-card-acts { display: flex; gap: .2rem; margin-top: .28rem; }
+    .mn-cat-badge { background: rgba(79,255,176,.15); color: var(--acc); border: 1px solid rgba(79,255,176,.2); border-radius: 3px; padding: 0 .28rem; font-size: .5rem; font-weight: 600; }
+
+    .mn-edit-modal-overlay {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,.82); backdrop-filter: blur(14px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .mn-edit-modal {
+      background: var(--s2); border: 1px solid var(--acc);
+      border-radius: 18px; width: 100%; max-width: 700px;
+      max-height: 92vh; overflow-y: auto;
+      padding: 1.6rem; animation: scaleIn .22s cubic-bezier(.34,1.56,.64,1);
+      box-shadow: 0 0 60px rgba(79,255,176,.15), 0 24px 64px rgba(0,0,0,.6);
+    }
+    .mn-edit-modal::-webkit-scrollbar { width: 4px; }
+    .mn-edit-modal::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+    .mn-edit-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.1rem; padding-bottom: .8rem;
+      border-bottom: 1px solid var(--bdr);
+    }
+    .mn-edit-modal-title { font-size: .95rem; font-weight: 700; color: var(--acc); display: flex; align-items: center; gap: .5rem; }
+    .mn-edit-field { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .6rem; }
+    .mn-edit-field label { font-family: var(--mono); font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .mn-edit-field input, .mn-edit-field textarea {
+      width: 100%; background: var(--s1); border: 1px solid var(--bdr2); border-radius: 8px;
+      color: var(--text); font-size: .74rem; padding: .35rem .6rem;
+      font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .mn-edit-field input:focus, .mn-edit-field textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(79,255,176,.08); }
+    .mn-edit-field textarea { resize: vertical; min-height: 65px; }
+    .mn-edit-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+    .mn-edit-actions { display: flex; gap: .4rem; justify-content: flex-end; margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--bdr); }
+
+    .panel-mid { background: var(--bg); border-right: 1px solid var(--bdr); }
+    .mid-toolbar {
+      flex-shrink: 0; padding: .42rem .9rem;
+      border-bottom: 1px solid var(--bdr);
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .filter-inp {
+      flex: 1; background: var(--s1); border: 1px solid var(--bdr); border-radius: 6px;
+      padding: .28rem .6rem; font-family: var(--mono); font-size: .7rem; color: var(--text); outline: none;
+    }
+    .filter-inp:focus { border-color: var(--acc); }
+    .filter-inp::placeholder { color: var(--muted); }
+    .sort-sel {
+      font-family: var(--mono); font-size: .65rem; background: var(--s1);
+      border: 1px solid var(--bdr); border-radius: 6px; padding: .25rem .5rem;
+      color: var(--muted); outline: none; cursor: pointer;
+    }
+    .pbar { height: 2px; background: transparent; flex-shrink: 0; overflow: hidden; }
+    .pbar-fill { height: 100%; background: linear-gradient(90deg, var(--acc2), var(--acc)); width: 0; transition: width .35s; box-shadow: 0 0 10px var(--acc); }
+    #stream { flex: 1; overflow-y: auto; padding: .6rem .85rem; display: flex; flex-direction: column; gap: .42rem; }
+    #stream::-webkit-scrollbar { width: 3px; }
+    #stream::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 2px; }
+    .acard {
+      background: var(--s1); border: 1px solid var(--bdr); border-radius: 11px;
+      padding: .75rem .9rem; display: flex; gap: .75rem; align-items: flex-start;
+      cursor: pointer; transition: border-color .18s, transform .14s, box-shadow .18s;
+      animation: fadeIn .3s ease both;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:none} }
+    .acard:hover { border-color: var(--bdr2); transform: translateY(-1px); box-shadow: 0 4px 24px rgba(0,0,0,.3); }
+    .acard.fresh { border-color: rgba(79,255,176,.35); box-shadow: 0 0 12px rgba(79,255,176,.06); }
+    .acard.fresh .asrc { color: var(--acc); }
+    .ath { width: 66px; height: 48px; border-radius: 5px; object-fit: cover; background: var(--faint); flex-shrink: 0; border: 1px solid var(--bdr); }
+    .aph { width: 66px; height: 48px; border-radius: 5px; background: var(--faint); border: 1px solid var(--bdr); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--muted); }
+    .abody { flex: 1; min-width: 0; }
+    .asrc { font-family: var(--mono); font-size: .57rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: flex; align-items: center; gap: .35rem; margin-bottom: .18rem; }
+    .npill { background: var(--acc); color: var(--bg); font-size: .48rem; padding: .03rem .26rem; border-radius: 2px; font-weight: 800; }
+    .atitle { font-size: .82rem; font-weight: 500; line-height: 1.4; color: var(--text); margin-bottom: .2rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .atitle a { color: inherit; text-decoration: none; }
+    .atitle a:hover { color: var(--acc); }
+    .adesc { font-size: .71rem; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: .2rem; }
+    .ameta { display: flex; gap: .4rem; font-family: var(--mono); font-size: .57rem; color: var(--faint); align-items: center; flex-wrap: wrap; }
+    .ameta .au { color: var(--purple); }
+    .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .9rem; padding: 2rem; text-align: center; }
+    .wico { font-size: 2.6rem; filter: drop-shadow(0 0 20px rgba(79,255,176,.3)); }
+    .wtitle { font-size: .95rem; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
+    .wsub { font-size: .74rem; color: var(--muted); line-height: 1.75; max-width: 300px; }
+    .wsteps { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .4rem; }
+    .ws { background: var(--s1); border: 1px solid var(--bdr); border-radius: 9px; padding: .6rem .75rem; text-align: left; transition: border-color .15s; }
+    .ws:hover { border-color: rgba(79,255,176,.2); }
+    .ws-n { font-family: var(--mono); font-size: .55rem; color: var(--acc); font-weight: 700; margin-bottom: .12rem; letter-spacing: .06em; }
+    .ws-t { font-size: .7rem; color: var(--muted); line-height: 1.45; }
+
+    .panel-right { background: var(--s1); }
+    .rtabs { display: flex; border-bottom: 1px solid var(--bdr); flex-shrink: 0; }
+    .rtab {
+      flex: 1; padding: .52rem .5rem; text-align: center;
+      font-family: var(--mono); font-size: .62rem; color: var(--muted);
+      cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; letter-spacing: .04em;
+    }
+    .rtab.active { color: var(--acc); border-color: var(--acc); background: rgba(79,255,176,.04); }
+    .rtab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.02); }
+    .rtab-badge { display: inline-block; background: var(--red); color: #fff; border-radius: 8px; padding: 0 .3rem; font-size: .5rem; font-weight: 700; margin-left: .25rem; vertical-align: middle; }
+
+    #rssTab { flex: 1; overflow-y: auto; padding: .5rem; display: flex; flex-direction: column; gap: .32rem; }
+    #rssTab::-webkit-scrollbar { width: 3px; }
+    #rssTab::-webkit-scrollbar-thumb { background: var(--faint); }
+    .rss-header-card { background: var(--s2); border: 1px solid var(--bdr2); border-radius: 9px; padding: .7rem .8rem; flex-shrink: 0; }
+    .rhc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; margin-bottom: .28rem; }
+    .rhc-name { font-size: .82rem; font-weight: 600; flex: 1; }
+    .rhc-count { font-family: var(--mono); font-size: .6rem; color: var(--acc); background: rgba(79,255,176,.1); border: 1px solid rgba(79,255,176,.25); border-radius: 5px; padding: .12rem .4rem; white-space: nowrap; }
+    .rhc-url { font-family: var(--mono); font-size: .6rem; color: var(--blue); word-break: break-all; margin-bottom: .45rem; opacity: .8; }
+    .rhc-btns { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .rbtn {
+      font-family: var(--mono); font-size: .61rem; padding: .22rem .55rem;
+      border-radius: 5px; border: 1px solid var(--bdr2); color: var(--muted);
+      background: transparent; cursor: pointer; transition: all .15s;
+    }
+    .rbtn:hover { border-color: var(--acc); color: var(--acc); }
+    .rbtn.primary { background: var(--acc); color: var(--bg); border-color: var(--acc); font-weight: 700; }
+    .rbtn.primary:hover { background: #6bffc0; }
+    .rss-live-strip {
+      background: rgba(79,255,176,.05); border: 1px solid rgba(79,255,176,.15); border-radius: 7px;
+      padding: .45rem .7rem; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .rls-label { font-family: var(--mono); font-size: .6rem; color: var(--muted); display: flex; align-items: center; gap: .3rem; }
+    .rls-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 5px var(--acc); animation: pulse 1.2s infinite; }
+    .rls-count { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--acc); }
+    .rls-sub { font-family: var(--mono); font-size: .55rem; color: var(--muted); }
+    .rls-right { text-align: right; }
+    .ritem {
+      background: var(--s2); border: 1px solid var(--bdr); border-radius: 7px;
+      padding: .52rem .65rem; transition: border-color .12s; animation: fadeIn .3s ease both;
+    }
+    .ritem:hover { border-color: var(--bdr2); }
+    .ritem.fresh-rss { border-color: rgba(79,255,176,.45); }
+    .ri-num { font-family: var(--mono); font-size: .55rem; color: var(--muted); margin-bottom: .08rem; }
+    .ri-title { font-size: .76rem; font-weight: 500; line-height: 1.35; margin-bottom: .16rem; }
+    .ri-title a { color: var(--text); text-decoration: none; }
+    .ri-title a:hover { color: var(--acc); }
+    .ri-meta { font-family: var(--mono); font-size: .57rem; color: var(--muted); display: flex; gap: .35rem; flex-wrap: wrap; align-items: center; }
+    .ri-new { background: var(--acc); color: var(--bg); font-size: .48rem; padding: .02rem .24rem; border-radius: 2px; font-weight: 800; }
+    .rss-empty { padding: 1.5rem; text-align: center; font-family: var(--mono); font-size: .7rem; color: var(--muted); line-height: 1.9; }
+
+    #consoleTab { flex: 1; overflow-y: auto; padding: .5rem .75rem; font-family: var(--mono); font-size: .68rem; line-height: 1.65; display: none; }
+    #consoleTab::-webkit-scrollbar { width: 3px; }
+    #consoleTab::-webkit-scrollbar-thumb { background: var(--faint); }
+    .clog { display: flex; gap: .5rem; padding: .04rem 0; }
+    .clog-ts { color: var(--faint); flex-shrink: 0; font-size: .6rem; padding-top: .05rem; }
+    .clog-ic { flex-shrink: 0; }
+    .clog-tx { word-break: break-all; }
+    .clog.success .clog-tx { color: var(--acc); }
+    .clog.error   .clog-tx { color: var(--red); }
+    .clog.warn    .clog-tx { color: var(--amber); }
+    .clog.info    .clog-tx { color: var(--blue); }
+    .clog.article .clog-tx { color: var(--text); }
+    .clog.default .clog-tx { color: var(--muted); }
+
+    #settingsTab {
+      flex: 1; overflow-y: auto; padding: .6rem .75rem;
+      display: none; flex-direction: column; gap: .55rem;
+    }
+    #settingsTab::-webkit-scrollbar { width: 3px; }
+    #settingsTab::-webkit-scrollbar-thumb { background: var(--faint); }
+    .shead { font-family: var(--mono); font-size: .55rem; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-weight: 700; padding: .1rem 0; }
+    .scard {
+      background: var(--s2); border: 1px solid var(--bdr); border-radius: 10px;
+      padding: .7rem .8rem; display: flex; flex-direction: column; gap: .5rem;
+    }
+    .srow { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .slabel { font-family: var(--mono); font-size: .6rem; color: var(--text); }
+    .slabel-sub { font-family: var(--mono); font-size: .55rem; color: var(--muted); margin-top: .08rem; }
+    .sinput {
+      background: var(--s1); border: 1px solid var(--bdr2); border-radius: 6px;
+      padding: .32rem .6rem; color: var(--text); font-family: var(--mono); font-size: .75rem;
+      width: 72px; outline: none; text-align: center; transition: border-color .15s;
+    }
+    .sinput:focus { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(79,255,176,.08); }
+    .sdivider { height: 1px; background: var(--bdr); }
+    .sfeed-card {
+      background: var(--s2); border: 1px solid var(--bdr); border-radius: 10px;
+      padding: .65rem .8rem;
+    }
+    .sfeed-name { font-size: .76rem; font-weight: 600; color: var(--acc); margin-bottom: .4rem; }
+    .sfeed-row { display: flex; gap: .35rem; align-items: center; margin-bottom: .38rem; }
+    .sfeed-inp {
+      flex: 1; background: var(--s1); border: 1px solid var(--bdr2); border-radius: 6px;
+      padding: .3rem .52rem; color: var(--text); font-family: var(--mono); font-size: .7rem; outline: none; transition: border-color .15s;
+    }
+    .sfeed-inp:focus { border-color: var(--acc); }
+    .user-card { background: var(--s1); border: 1px solid var(--bdr2); border-radius: 8px; padding: .5rem .65rem; display: flex; align-items: center; gap: .5rem; }
+    .user-card-info { flex: 1; min-width: 0; }
+    .user-card-name { font-size: .72rem; font-weight: 700; color: var(--text); }
+    .user-card-email { font-size: .6rem; color: var(--muted); margin-top: .05rem; }
+    .user-card-meta { font-size: .55rem; color: var(--dim); margin-top: .08rem; }
+    .role-badge { display: inline-block; font-size: .52rem; font-weight: 700; padding: .1rem .35rem; border-radius: 4px; text-transform: uppercase; letter-spacing: .06em; }
+    .role-badge.admin, .role-badge.location_admin {
+      background: rgba(79,255,176,.15); color: var(--acc); border: 1px solid rgba(79,255,176,.3);
+    }
+    .role-badge.reporter { background: rgba(99,179,237,.12); color: #63b3ed; border: 1px solid rgba(99,179,237,.25); }
+    .sbtn-row { display: flex; gap: .3rem; }
+
+    .drawer { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.82); backdrop-filter: blur(14px); }
+    .drawer.open { display: flex; }
+    .dbox { background: var(--s2); border: 1px solid var(--acc); border-radius: 18px; width: 95%; max-width: 560px; padding: 1.6rem; animation: scaleIn .22s cubic-bezier(.34,1.56,.64,1); box-shadow: 0 0 60px rgba(79,255,176,.15), 0 24px 64px rgba(0,0,0,.6); }
+    @keyframes slideUp { from{transform:translateY(28px);opacity:0} to{transform:none;opacity:1} }
+    @keyframes scaleIn { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+    .dhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--bdr); }
+    .dtitle { font-size: .9rem; font-weight: 700; letter-spacing: -.01em; }
+    .dclose { background: var(--faint); border: 1px solid var(--bdr2); color: var(--muted); border-radius: 7px; width: 26px; height: 26px; cursor: pointer; font-size: .75rem; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .dclose:hover { color: var(--text); border-color: var(--red); color: var(--red); }
+    .dtextarea { width: 100%; min-height: 130px; resize: vertical; background: var(--s1); border: 1px solid var(--bdr2); border-radius: 9px; padding: .7rem .85rem; color: var(--text); font-family: var(--mono); font-size: .76rem; line-height: 1.8; outline: none; margin-bottom: .7rem; transition: border-color .15s, box-shadow .15s; }
+    .dtextarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(79,255,176,.08); }
+    .dtextarea::placeholder { color: var(--muted); }
+    .dopts { display: flex; gap: .65rem; margin-bottom: .75rem; flex-wrap: wrap; }
+    .dopt label { font-family: var(--mono); font-size: .58rem; color: var(--muted); display: block; margin-bottom: .22rem; text-transform: uppercase; letter-spacing: .06em; }
+    .dopt select, .dopt input { background: var(--s1); border: 1px solid var(--bdr2); border-radius: 7px; padding: .36rem .6rem; color: var(--text); font-family: var(--mono); font-size: .73rem; outline: none; transition: border-color .15s; }
+    .dopt select:focus, .dopt input:focus { border-color: var(--acc); }
+    .dactions { display: flex; gap: .5rem; justify-content: flex-end; }
+    .dcancel { padding: .52rem 1rem; background: var(--faint); color: var(--muted); border: 1px solid var(--bdr2); border-radius: 8px; font-size: .78rem; cursor: pointer; transition: all .15s; }
+    .dcancel:hover { color: var(--text); border-color: var(--bdr2); }
+    .dgo { padding: .52rem 1.2rem; background: var(--acc); color: var(--bg); border: none; border-radius: 8px; font-family: var(--sans); font-weight: 700; font-size: .8rem; cursor: pointer; display: flex; align-items: center; gap: .35rem; transition: all .18s; }
+    .dgo:hover { background: #6bffc0; box-shadow: 0 4px 20px rgba(79,255,176,.4); transform: translateY(-1px); }
+    .dgo:disabled { opacity: .45; pointer-events: none; }
+
+    #toast { position: fixed; bottom: 1.2rem; right: 1.2rem; padding: .6rem 1rem; border-radius: 10px; font-family: var(--mono); font-size: .74rem; background: var(--s2); border: 1px solid var(--bdr2); z-index: 999; transform: translateY(12px); opacity: 0; transition: all .25s cubic-bezier(.34,1.56,.64,1); pointer-events: none; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+    #toast.show { transform: none; opacity: 1; }
+    #toast.success { border-color: var(--acc2); color: var(--acc); box-shadow: 0 8px 32px rgba(0,0,0,.4), 0 0 20px rgba(79,255,176,.1); }
+    #toast.error { border-color: var(--red); color: var(--red); }
+    #toast.info { border-color: var(--blue); color: var(--blue); }
+
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .spin { display: inline-block; animation: spin .7s linear infinite !important; }
+
+    @media(max-width:1000px) {
+      .layout { grid-template-columns: 240px 1fr 0; }
+      .panel-right { display: none; }
+    }
+    @media(max-width:680px) {
+      .layout { grid-template-columns: 0 1fr 0; }
+      .panel-left { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><div class="lpulse"></div>RSS/gen</div>
+
+  {% if current_user.role in ['admin','location_admin'] %}
+  <!-- Scrape UI – visible only for admins -->
+  <div class="url-row">
+    <div class="url-wrap">
+      <input id="quickUrl" type="text" placeholder="https://nagariknews.com — press Enter" autocomplete="off" spellcheck="false"/>
+      <span class="url-hint">↵ Enter</span>
+    </div>
+    <button class="btn-scrape" id="goBtn" onclick="quickScrape()">
+      <span id="goIco">⚡</span> Scrape
+    </button>
+    <button class="btn-bulk" onclick="openDrawer()">⊞ Bulk</button>
+  </div>
+  {% else %}
+  <!-- For reporters: show a message or nothing -->
+  <div class="url-row" style="flex:1; justify-content:center; color:var(--muted); font-family:var(--mono); font-size:.7rem;">
+    <span>📝 You are a reporter – use the <strong>✏️ Add News</strong> button to submit articles.</span>
+  </div>
+  {% endif %}
+
+  <div class="topbar-right">
+    <button class="btn-bulk" onclick="openManual()" style="color:var(--acc)">✏️ Add News</button>
+    <div class="auto-badge"><div class="auto-dot"></div>Auto <span id="countdown">—</span></div>
+    <span id="statusLbl">Idle</span>
+    <div class="user-badge" title="Logged in as {{ current_user.username }} ({{ current_user.role }})">
+      <span class="user-name">{{ current_user.username }}</span>
+      <span class="user-role">{{ current_user.role }}</span>
+    </div>
+    <a href="/account" class="btn-bulk" style="text-decoration:none;display:inline-flex;align-items:center;margin-right:.25rem">👤 Account</a>
+    <a href="/logout" class="btn-bulk" style="text-decoration:none;display:inline-flex;align-items:center">⎋ Logout</a>
+  </div>
+</div>
+<!-- ── LOCATION BANNER ── -->
+{% if not has_location %}
+<div style="background:rgba(255,182,39,.15);border:1px solid rgba(255,182,39,.4);border-radius:8px;padding:.6rem 1rem;margin:.5rem 1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+  <span style="font-size:.85rem;color:var(--amber);">⚠️ You have not set your location. Please set your location to receive news for approval.</span>
+  <a href="/account#location" class="btn-bulk" style="background:var(--acc);color:#0f1117;border-color:var(--acc);padding:.25rem .8rem;border-radius:6px;text-decoration:none;font-weight:700;">Set Location</a>
+</div>
+{% endif %}
+
+<div class="layout">
+
+  <!-- ── LEFT: FEED LIST ── -->
+  <div class="panel panel-left">
+    <div class="panel-head">
+      <div class="ph-left">
+        <span class="ph-title">Live Feeds</span>
+        <span class="ph-badge" id="feedCount">{{ feeds|length }}</span>
+      </div>
+    </div>
+    <div class="feed-list" id="feedList">
+      {% if feeds %}
+        {% for feed in feeds %}
+        <div class="fi {% if feed.status=='error' %}error{% endif %}{% if feed.paused %} fi-paused{% endif %}" id="fi-{{ feed.id }}"
+             onclick="selectFeed('{{ feed.id }}','{{ (feed.custom_name or feed.name)|e }}')">
+          <div class="fi-r1">
+            <div class="fi-fav">
+              <img src="https://www.google.com/s2/favicons?domain={{ feed.source_url }}&sz=32"
+                   onerror="this.parentNode.innerHTML='📡'" alt=""/>
+            </div>
+            <div class="fi-name">{{ feed.custom_name or feed.name }}</div>
+            <div class="fi-dot {{ feed.status or 'ok' }}" id="fdot-{{ feed.id }}"></div>
+          </div>
+          <div class="fi-r2">
+            <span class="fi-cnt" id="fcnt-{{ feed.id }}">{{ feed.item_count }}</span>
+            <span>articles</span>
+            {% if feed.paused %}<span style="color:var(--amber)">· paused</span>{% endif %}
+            {% if feed.last_fetched %}
+            <span>·</span><span id="flf-{{ feed.id }}">{{ feed.last_fetched[:16].replace('T',' ') }}</span>
+            {% endif %}
+          </div>
+          <div class="fi-acts" onclick="event.stopPropagation()">
+            <button class="btiny" onclick="copyRss('{{ feed.id }}',this)" title="Copy RSS feed URL">📋 RSS</button>
+            <button class="btiny" id="rfb-{{ feed.id }}" onclick="refreshFeed('{{ feed.id }}',this)">↻</button>
+            {% if current_user.role in ['admin','location_admin'] %}
+            <button class="btiny" onclick="togglePauseFeed('{{ feed.id }}',this)" title="{{ 'Resume' if feed.paused else 'Pause' }}">{{ '▶' if feed.paused else '⏸' }}</button>
+            <button class="btiny del" onclick="deleteFeed('{{ feed.id }}')">✕</button>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-feeds" id="emptyFeeds">📡<br/><br/>No feeds yet.<br/>Paste a URL above.</div>
+      {% endif %}
+    </div>
+
+    <!-- Manual News Section -->
+    <div style="border-top:1px solid var(--bdr);padding:.5rem .65rem .3rem;flex-shrink:0;background:rgba(79,255,176,.02)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span class="ph-title" style="color:var(--acc)">✏️ Manual News</span>
+          <span class="ph-badge" id="manualCount">0</span>
+        </div>
+        <a href="/feed/manual.xml" target="_blank" class="btiny" style="text-decoration:none;font-size:.52rem">📡 RSS</a>
+      </div>
+      <div id="manualFeedList" style="display:flex;flex-direction:column;gap:.22rem;max-height:220px;overflow-y:auto">
+        <div style="font-size:.58rem;color:var(--dim);padding:.2rem 0">Loading…</div>
+      </div>
+      <button onclick="openManual()" class="rbtn primary"
+        style="width:100%;margin-top:.4rem;font-size:.62rem;padding:.35rem 0;border-radius:8px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:.3rem">
+        <span style="font-size:.8rem">+</span> Add Manual News
+      </button>
+    </div>
+  </div>
+  <div class="panel panel-mid">
+    <div class="panel-head">
+      <div class="ph-left">
+        <span class="ph-title" id="artLabel">Articles</span>
+        <span class="ph-badge" id="artBadge">0</span>
+      </div>
+      <div class="ph-live" id="liveIndicator" style="display:none">
+        <div class="ph-live-dot"></div><span>LIVE</span>
+      </div>
+    </div>
+    <div class="mid-toolbar">
+      <input class="filter-inp" id="filterInp" placeholder="Filter articles…" oninput="doFilter()"/>
+      <select class="sort-sel" id="sortSel" onchange="doSort()">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="title">A→Z</option>
+      </select>
+    </div>
+    <div class="pbar"><div class="pbar-fill" id="pbar"></div></div>
+    <div id="stream">
+      <div class="welcome" id="welcomeMsg">
+        <div class="wico">📡</div>
+        <div class="wtitle">Live news scraper</div>
+        <div class="wsub">Paste any news homepage URL and watch articles stream in real-time.</div>
+        <div class="wsteps">
+          <div class="ws"><div class="ws-n">01 PASTE</div><div class="ws-t">Drop a news URL above</div></div>
+          <div class="ws"><div class="ws-n">02 SCRAPE</div><div class="ws-t">Articles extracted live</div></div>
+          <div class="ws"><div class="ws-n">03 RSS</div><div class="ws-t">Feed ready instantly</div></div>
+          <div class="ws"><div class="ws-n">04 AUTO</div><div class="ws-t">Refreshes every {{ refresh_mins }} min, 24h only</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: TABS ── -->
+  <div class="panel panel-right">
+    <div class="rtabs">
+      <div class="rtab active" id="tab-rss" onclick="switchTab('rss')">RSS</div>
+      <div class="rtab" id="tab-log" onclick="switchTab('log')">Console <span id="logBadge" class="rtab-badge" style="display:none">!</span></div>
+      {% if current_user.role in ['admin','location_admin'] %}
+      <div class="rtab" id="tab-pending" onclick="switchTab('pending')">⏳ Pending <span id="pendingBadge" class="rtab-badge" style="display:none">0</span></div>
+      {% endif %}
+      <div class="rtab" id="tab-settings" onclick="switchTab('settings')">⚙ Settings</div>
+    </div>
+
+    <!-- RSS FEED TAB -->
+    <div id="rssTab" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:.5rem;gap:.32rem;">
+      <div class="rss-empty" id="rssEmpty">Select a feed to see<br/>its live RSS items here.</div>
+    </div>
+
+    <!-- CONSOLE TAB -->
+    <div id="consoleTab"></div>
+
+    <!-- PENDING APPROVAL TAB -->
+    <div id="pendingTab" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:.5rem;gap:.35rem;">
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--amber);background:rgba(255,182,39,.07);border:1px solid rgba(255,182,39,.2);border-radius:8px;padding:.55rem .7rem;flex-shrink:0">
+        ⚠ News items submitted by reporters — a senior editor must approve or reject each one before it appears in the RSS feed.
+      </div>
+      <div id="pendingList" style="display:flex;flex-direction:column;gap:.4rem;"></div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div id="settingsTab">
+      <!-- Global settings -->
+      <div class="shead">⚙ Global Settings</div>
+      <div class="scard">
+        <div class="srow">
+          <div>
+            <div class="slabel">Auto-refresh interval</div>
+            <div class="slabel-sub">Minutes between auto-refreshes (1–1440)</div>
+          </div>
+          <input class="sinput" id="cfg-refresh" type="number" min="1" max="1440" value="{{ refresh_mins }}"/>
+        </div>
+        <div class="sdivider"></div>
+        <div class="srow">
+          <div>
+            <div class="slabel">Max article age</div>
+            <div class="slabel-sub">Hours to keep articles (1–720)</div>
+          </div>
+          <input class="sinput" id="cfg-age" type="number" min="1" max="720" value="{{ max_age_hours }}"/>
+        </div>
+        <div class="sdivider"></div>
+        <div class="srow">
+          <div>
+            <div class="slabel">Default articles per feed</div>
+            <div class="slabel-sub">Max items per source (9999 = unlimited)</div>
+          </div>
+          <input class="sinput" id="cfg-items" type="number" min="1" value="{{ default_max_items }}" placeholder="9999 = unlimited"/>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:.1rem">
+          <button class="rbtn primary" onclick="saveGlobalSettings()">Save Settings</button>
+        </div>
+      </div>
+
+      <!-- Per-feed settings -->
+      <div class="shead" id="sfeedHead" style="display:none">📡 Feed Settings</div>
+      <div class="sfeed-card" id="sfeedCard" style="display:none">
+        <div class="sfeed-name" id="sfeedName">—</div>
+        <div class="slabel-sub" style="margin-bottom:.4rem">Custom display name</div>
+        <div class="sfeed-row">
+          <input class="sfeed-inp" id="sfeed-name-inp" placeholder="Display name…"/>
+          <button class="rbtn" onclick="saveFeedName()">Save</button>
+        </div>
+        <div class="slabel-sub" style="margin-bottom:.4rem">Max articles for this feed</div>
+        <div class="sfeed-row">
+          <input class="sfeed-inp" id="sfeed-max-inp" type="number" min="1" style="max-width:80px" placeholder="9999"/>
+          <button class="rbtn" onclick="saveFeedMax()">Save</button>
+        </div>
+        <div class="sbtn-row" style="margin-top:.2rem">
+          {% if current_user.role in ['admin','location_admin'] %}
+          <button class="rbtn" id="sfeed-pause-btn" onclick="saveFeedPause()">⏸ Pause</button>
+          <button class="rbtn" style="color:var(--red)" onclick="deleteFeed(activeFeedId)">✕ Delete Feed</button>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Google Drive image settings — admin only -->
+      {% if current_user.role in ['admin','location_admin'] %}
+      <div class="shead">☁️ Google Drive Images</div>
+      <div class="scard" id="driveSettingsCard">
+        <div class="slabel">Auto-upload images to Google Drive</div>
+        <div class="slabel-sub" style="margin:.2rem 0 .45rem">
+          When configured, every image uploaded via ✏️ Add News is stored in your Drive folder
+          and the permanent public Drive URL is saved — no local disk needed.
+        </div>
+
+        <!-- Status badge -->
+        <div id="driveStatusRow" style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
+          <span id="driveStatusDot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block"></span>
+          <span id="driveStatusText" style="font-size:.6rem;color:var(--dim)">Checking…</span>
+          <button class="rbtn" style="font-size:.52rem;padding:.15rem .35rem;margin-left:auto" onclick="toggleDriveForm()">⚙ Configure</button>
+        </div>
+
+        <!-- Collapsible credential form -->
+        <div id="driveCredForm" style="display:none;flex-direction:column;gap:.35rem">
+          <div class="slabel-sub" style="line-height:1.6;margin-bottom:.1rem">
+            <b>Setup steps:</b><br>
+            1. Google Cloud Console → IAM &amp; Admin → Service Accounts → Create<br>
+            2. On the new account → Keys → Add Key → JSON → download the file<br>
+            3. Google Drive → create a folder → share it with the service account email (Editor)<br>
+            4. Copy the folder ID from the Drive URL: <code style="font-size:.55rem">…/folders/<b>FOLDER_ID</b></code>
+          </div>
+
+          <div>
+            <div class="slabel-sub" style="margin-bottom:.15rem">Drive Folder ID</div>
+            <input class="sfeed-inp" id="cfg-drive-folder" style="width:100%;font-size:.65rem"
+              placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74"
+              title="The ID from the Google Drive folder URL"/>
+          </div>
+
+          <div>
+            <div class="slabel-sub" style="margin-bottom:.15rem">Service Account JSON key <span style="opacity:.6">(paste full file contents)</span></div>
+            <textarea class="sfeed-inp" id="cfg-drive-sa-json" rows="6"
+              style="width:100%;font-size:.58rem;font-family:var(--mono);resize:vertical;min-height:80px"
+              placeholder='{ "type": "service_account", "project_id": "...", "private_key_id": "...", ... }'></textarea>
+          </div>
+
+          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+            <button class="rbtn primary" style="font-size:.58rem" onclick="saveDriveSettings()">💾 Save Drive Config</button>
+            <button class="rbtn" style="font-size:.58rem;color:var(--err)" id="driveClearBtn" onclick="clearDriveSettings()" style="display:none">🗑 Clear</button>
+          </div>
+        </div>
+      </div>
+      {% endif %}{# end admin-only Drive #}
+
+      <!-- Master feed info -->
+      <div class="shead">🔗 Master Feed</div>
+      <div class="scard">
+        <div class="slabel">Permanent combined feed URL</div>
+        <div style="font-family:var(--mono);font-size:.6rem;color:var(--blue);word-break:break-all;margin:.3rem 0;opacity:.85" id="sMasterUrl">—</div>
+        <div class="slabel-sub" style="margin-bottom:.35rem">Auto-updates every {{ refresh_mins }} min · Last 24h only · Safe for automation</div>
+        <div style="display:flex;gap:.3rem">
+          <button class="rbtn primary" style="font-size:.58rem" onclick="copyText(window.location.origin+'/feed/master.xml',this)">Copy URL</button>
+          <button class="rbtn" style="font-size:.58rem" onclick="window.open(window.location.origin+'/feed/master.xml','_blank')">View XML</button>
+        </div>
+      </div>
+
+      <!-- Manual news feed -->
+      <div class="shead">✏️ Manual News Feed</div>
+      <div class="scard">
+        <div class="slabel">RSS feed of manually added items</div>
+        <div style="font-family:var(--mono);font-size:.6rem;color:var(--blue);word-break:break-all;margin:.3rem 0;opacity:.85"
+             id="sManualUrl">—</div>
+        <div class="slabel-sub" style="margin-bottom:.35rem">Items you add manually via ✏️ Add News button</div>
+        <div style="display:flex;gap:.3rem">
+          <button class="rbtn primary" style="font-size:.58rem" onclick="copyText(window.location.origin+'/feed/manual.xml',this)">Copy URL</button>
+          <button class="rbtn" style="font-size:.58rem" onclick="window.open(window.location.origin+'/feed/manual.xml','_blank')">View XML</button>
+          <button class="rbtn" style="font-size:.58rem;color:var(--acc)" onclick="openManual()">+ Add Item</button>
+        </div>
+      </div>
+
+      <!-- SMTP / Email settings — admin only -->
+      {% if current_user.role in ['admin','location_admin'] %}
+      <div class="shead">📧 Email / SMTP Settings</div>
+      <div class="scard" id="smtpSettingsCard">
+        <div class="slabel">Outbound email for OTP verification</div>
+        <div class="slabel-sub" style="margin:.2rem 0 .55rem">Used when reporters verify their email during registration. Works with Gmail, SendGrid, any SMTP provider.</div>
+
+        <div id="smtpStatusRow" style="display:flex;align-items:center;gap:.4rem;margin-bottom:.6rem">
+          <span id="smtpStatusDot" style="width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block"></span>
+          <span id="smtpStatusText" style="font-size:.6rem;color:var(--dim)">Checking…</span>
+          <button class="rbtn" style="font-size:.52rem;padding:.15rem .35rem;margin-left:auto" onclick="toggleSmtpForm()">⚙ Configure</button>
+        </div>
+
+        <div id="smtpCredForm" style="display:none;flex-direction:column;gap:.35rem">
+          <div class="slabel-sub" style="line-height:1.7;margin-bottom:.1rem">
+            <b>Gmail setup:</b> Use <code style="font-size:.58rem">smtp.gmail.com</code> port <code style="font-size:.58rem">587</code>,
+            your Gmail address as user, and an <b>App Password</b> (not your login password).<br>
+            Enable 2FA → Google Account → Security → App Passwords.
+          </div>
+
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:.35rem">
+            <div>
+              <div class="slabel-sub" style="margin-bottom:.1rem">SMTP Host</div>
+              <input class="sfeed-inp" id="cfg-smtp-host" placeholder="smtp.gmail.com" style="width:100%;font-size:.68rem"/>
+            </div>
+            <div>
+              <div class="slabel-sub" style="margin-bottom:.1rem">Port</div>
+              <input class="sfeed-inp" id="cfg-smtp-port" type="number" value="587" style="width:100%;font-size:.68rem"/>
+            </div>
+          </div>
+
+          <div>
+            <div class="slabel-sub" style="margin-bottom:.1rem">SMTP Username (email)</div>
+            <input class="sfeed-inp" id="cfg-smtp-user" type="email" placeholder="sender@gmail.com" style="width:100%;font-size:.68rem"/>
+          </div>
+
+          <div>
+            <div class="slabel-sub" style="margin-bottom:.1rem">SMTP Password / App Password</div>
+            <input class="sfeed-inp" id="cfg-smtp-pass" type="password" placeholder="••••••••••••••••" style="width:100%;font-size:.68rem"/>
+          </div>
+
+          <div>
+            <div class="slabel-sub" style="margin-bottom:.1rem">From Address <span style="opacity:.6">(optional, defaults to username)</span></div>
+            <input class="sfeed-inp" id="cfg-smtp-from" type="email" placeholder="noreply@yourdomain.com" style="width:100%;font-size:.68rem"/>
+          </div>
+
+          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.1rem">
+            <button class="rbtn primary" style="font-size:.58rem" onclick="saveSmtpSettings()">💾 Save SMTP Config</button>
+            <input class="sfeed-inp" id="cfg-smtp-test-to" type="email" placeholder="test@gmail.com" style="width:160px;font-size:.62rem;margin:0"/>
+            <button class="rbtn" style="font-size:.58rem" onclick="testSmtp()">✉ Send Test</button>
+          </div>
+          <div id="smtpSaveMsg" style="font-size:.65rem;color:var(--acc);margin-top:.2rem;display:none"></div>
+        </div>
+      </div>
+
+      <!-- Users Management — admin only -->
+      <div class="shead">👥 Registered Users</div>
+      <div class="scard" id="usersCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <div class="slabel-sub">All accounts — change roles or remove users</div>
+          <div style="display:flex;gap:.3rem">
+            <button class="rbtn primary" style="font-size:.52rem;padding:.15rem .45rem" onclick="showCreateUserForm()">＋ Create Reporter</button>
+            <button class="rbtn" style="font-size:.52rem;padding:.15rem .45rem" onclick="loadUsers()">↻ Refresh</button>
+          </div>
+        </div>
+        <!-- Create Reporter Form (hidden by default) -->
+        <div id="createUserForm" style="display:none;background:rgba(79,255,176,.04);border:1px solid rgba(79,255,176,.2);border-radius:8px;padding:.65rem .75rem;margin-bottom:.6rem">
+          <div style="font-family:var(--mono);font-size:.58rem;color:var(--acc);font-weight:700;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em">✚ New Reporter Account</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.4rem">
+            <div>
+              <div style="font-size:.55rem;color:var(--muted);margin-bottom:.15rem">USERNAME *</div>
+              <input class="sfeed-inp" id="cu-username" placeholder="reporter_name" style="width:100%;font-size:.65rem"/>
+            </div>
+            <div>
+              <div style="font-size:.55rem;color:var(--muted);margin-bottom:.15rem">GMAIL ADDRESS *</div>
+              <input class="sfeed-inp" id="cu-email" type="email" placeholder="reporter@gmail.com" style="width:100%;font-size:.65rem"/>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.4rem">
+            <div>
+              <div style="font-size:.55rem;color:var(--muted);margin-bottom:.15rem">PHONE (optional, e.g. +977…)</div>
+              <input class="sfeed-inp" id="cu-phone" placeholder="+977 9812345678" style="width:100%;font-size:.65rem"/>
+            </div>
+            <div>
+              <div style="font-size:.55rem;color:var(--muted);margin-bottom:.15rem">ROLE</div>
+              <select class="sfeed-inp" id="cu-role" style="width:100%;font-size:.65rem">
+                <option value="reporter">Reporter</option>
+                <option value="location_admin">Location Admin</option>
+                <option value="admin">Admin (global)</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:.4rem">
+            <div style="font-size:.55rem;color:var(--muted);margin-bottom:.15rem">PASSWORD * (min 12 chars, uppercase, number, special)</div>
+            <input class="sfeed-inp" id="cu-password" type="password" placeholder="StrongPass@2024" style="width:100%;font-size:.65rem"/>
+          </div>
+          <div id="cu-error" style="font-size:.6rem;color:var(--red);margin-bottom:.35rem;display:none"></div>
+          <div style="display:flex;gap:.3rem;justify-content:flex-end">
+            <button class="rbtn" style="font-size:.55rem" onclick="hideCreateUserForm()">Cancel</button>
+            <button class="rbtn primary" style="font-size:.55rem" onclick="submitCreateUser()">✚ Create Account</button>
+          </div>
+        </div>
+        <div id="usersList" style="display:flex;flex-direction:column;gap:.35rem">
+          <div style="font-size:.62rem;color:var(--dim)">Loading…</div>
+        </div>
+      </div>
+
+      {% endif %}{# end admin-only SMTP #}
+
+    </div>
+  </div>
+
+</div>
+
+<!-- MANUAL NEWS MODAL -->
+<div class="drawer" id="manualDrawer" onclick="if(event.target===this)closeManual()">
+  <div class="dbox" style="max-width:680px;width:95%;max-height:92vh;overflow-y:auto;border-radius:18px;border-color:rgba(79,255,176,.4)">
+    <div class="dhead">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)"></div>
+        <span class="dtitle" id="manualDrawerTitle" style="font-family:var(--mono);font-size:.9rem;color:var(--acc)">✏️ Add News Manually</span>
+      </div>
+      <button class="dclose" onclick="closeManual()">✕</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:.55rem;padding:.3rem 0">
+
+      <!-- Title (required) -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+        <label style="color:var(--red)">Title <span style="color:var(--red)">*</span></label>
+        <input class="sinput" id="mn-title" placeholder="News headline…" style="width:100%" required/>
+      </div>
+
+      <!-- Description -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+        <label>Short Description / Summary</label>
+        <textarea class="sinput" id="mn-description" rows="2"
+          placeholder="Brief summary shown in RSS readers…"
+          style="width:100%;resize:vertical;font-family:inherit;font-size:.7rem"></textarea>
+      </div>
+
+      <!-- Body -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+        <label>Body / Full Content (HTML allowed)</label>
+        <textarea class="sinput" id="mn-body" rows="5"
+          placeholder="Full article body. HTML tags are supported."
+          style="width:100%;resize:vertical;font-family:inherit;font-size:.7rem"></textarea>
+      </div>
+
+      <!-- Category + Tags row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Category <span style="font-size:.5rem;opacity:.6">(one only)</span></label>
+          <input class="sinput" id="mn-category" placeholder="Politics" style="width:100%"/>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Tags <span style="font-size:.5rem;opacity:.6">(comma-separated)</span></label>
+          <input class="sinput" id="mn-tags" placeholder="nepal, election, kathmandu" style="width:100%"/>
+        </div>
+      </div>
+
+      <!-- Source name + URL row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Source / Publisher Name</label>
+          <input class="sinput" id="mn-source-name" placeholder="Kantipur, Nagarik…" style="width:100%"/>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Source URL</label>
+          <input class="sinput" id="mn-source-url" type="url" placeholder="https://…" style="width:100%"/>
+        </div>
+      </div>
+
+      <!-- Creator + Article link row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Creator / Author</label>
+          <input class="sinput" id="mn-creator" placeholder="Reporter name…" style="width:100%"/>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Article / Permalink URL</label>
+          <input class="sinput" id="mn-link" type="url" placeholder="https://…" style="width:100%"/>
+        </div>
+      </div>
+
+      <!-- Image -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+        <label>Featured Image</label>
+        <div style="display:flex;gap:.4rem;align-items:center;width:100%;flex-wrap:wrap">
+          <input class="sinput" id="mn-image-url" type="url" placeholder="https://… direct image URL"
+                 style="flex:1;min-width:140px" oninput="previewManualImage()"/>
+          <label class="rbtn" style="cursor:pointer;font-size:.6rem;padding:.25rem .5rem;white-space:nowrap">
+            📁 Upload
+            <input type="file" id="mn-image-file" accept="image/*" style="display:none" onchange="handleManualImageUpload()"/>
+          </label>
+          <span style="font-size:.55rem;color:var(--dim)">or</span>
+          <button class="rbtn" onclick="pickFromDrive()" style="font-size:.6rem;padding:.25rem .5rem">
+            ☁️ Drive
+          </button>
+        </div>
+        <img id="mn-image-preview" src="" alt=""
+             style="display:none;max-height:100px;max-width:220px;border-radius:4px;margin-top:.3rem;border:1px solid var(--bdr)"/>
+      </div>
+
+      <!-- Publish date + time row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Publish Date <span style="color:var(--dim);font-size:.55rem">(defaults to now)</span></label>
+          <div style="display:flex;gap:.3rem;align-items:center;width:100%">
+            <input class="sinput" id="mn-pub-date" type="date" style="flex:1"/>
+            <button class="rbtn" onclick="setManualDateNow()" style="font-size:.55rem;padding:.2rem .4rem;white-space:nowrap">Now</button>
+          </div>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <label>Publish Time <span style="color:var(--dim);font-size:.55rem">(HH:MM)</span></label>
+          <div style="display:flex;gap:.3rem;align-items:center;width:100%">
+            <input class="sinput" id="mn-pub-time" type="time" style="flex:1"/>
+            <button class="rbtn" onclick="setManualTimeNow()" style="font-size:.55rem;padding:.2rem .4rem;white-space:nowrap">Now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Location section (conditional based on role) ── -->
+      {% if current_user.role in ['admin','location_admin'] %}
+      <!-- For admins: full location selectors -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.35rem">
+        <label>Location / Dateline</label>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.45rem;width:100%">
+          <select class="sinput" id="mn-country" style="width:100%"></select>
+          <select class="sinput" id="mn-province" style="width:100%"></select>
+          <select class="sinput" id="mn-district" style="width:100%"></select>
+          <select class="sinput" id="mn-local-level" style="width:100%"></select>
+          <select class="sinput" id="mn-ward" style="width:100%"></select>
+          <input class="sinput" id="mn-area" placeholder="Area / Tole / Landmark (optional)" style="width:100%"/>
+        </div>
+        <input class="sinput" id="mn-location" placeholder="Generated location label" style="width:100%" readonly/>
+      </div>
+      {% else %}
+      <!-- For reporters / location_admin (non-admin): read-only location label from their assigned location -->
+      <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+        <label>Your Assigned Location (read‑only)</label>
+        <input class="sinput" id="mn-location" placeholder="Your location will be used automatically"
+               style="width:100%;background:var(--s2);color:var(--muted);border-color:var(--bdr);" readonly/>
+      </div>
+      <!-- Hidden fields to store the user's location IDs; they will be set by JavaScript -->
+      <input type="hidden" id="mn-country" value="{{ user_location.country_id or '' }}" />
+      <input type="hidden" id="mn-province" value="{{ user_location.province_id or '' }}" />
+      <input type="hidden" id="mn-district" value="{{ user_location.district_id or '' }}" />
+      <input type="hidden" id="mn-local-level" value="{{ user_location.local_level_id or '' }}" />
+      <input type="hidden" id="mn-ward" value="{{ user_location.ward_id or '' }}" />
+      <input type="hidden" id="mn-area" value="{{ user_location.area_id or '' }}" />
+      {% endif %}
+
+      <!-- ── REPORTER SUBMISSION SECTION ── -->
+      <div style="border-top:1px solid var(--bdr);padding-top:.65rem;margin-top:.2rem">
+        <div style="font-family:var(--mono);font-size:.55rem;color:var(--amber);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem">
+          📝 Reporter Submission
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+            <label style="color:var(--red)">Reporter Name <span style="color:var(--red)">*</span></label>
+            <input class="sinput" id="mn-submitted-by" placeholder="Your full name…" style="width:100%;border-color:rgba(255,182,39,.35)" required/>
+          </div>
+          <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+            <label style="color:var(--red)">Phone Number <span style="color:var(--red)">*</span></label>
+            <input class="sinput" id="mn-reporter-phone" type="tel" placeholder="+977 9812345678" style="width:100%" required/>
+          </div>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem;margin-top:.5rem">
+          <label style="color:var(--red)">Email Address <span style="color:var(--red)">*</span></label>
+          <input class="sinput" id="mn-reporter-email" type="email" placeholder="reporter@example.com" style="width:100%" required/>
+        </div>
+        <div class="dopt" style="flex-direction:column;align-items:flex-start;gap:.25rem;margin-top:.5rem">
+          <label>Notes for Editor <span style="font-size:.5rem;opacity:.6">(optional)</span></label>
+          <textarea class="sinput" id="mn-reporter-notes" rows="2"
+            placeholder="Any context or instructions for the approving editor…"
+            style="width:100%;resize:vertical;font-family:inherit;font-size:.7rem"></textarea>
+        </div>
+        <div style="font-size:.6rem;color:var(--muted);margin-top:.3rem;line-height:1.6;background:rgba(255,182,39,.05);border:1px solid rgba(255,182,39,.1);border-radius:6px;padding:.4rem .55rem">
+          ⚠ This item will be <strong>held for senior approval</strong> before appearing in the RSS feed. A senior editor will review and approve or reject it.
+        </div>
+      </div>
+
+    </div><!-- end fields -->
+
+    <div class="dactions" style="margin-top:.6rem">
+      <button class="dcancel" onclick="closeManual()">Cancel</button>
+      <button class="dgo" id="mnSaveBtn" onclick="saveManualNews()">
+        <span id="mnSaveIco">📨</span>
+        <span id="mnSaveLbl"> Submit for Approval</span>
+      </button>
+    </div>
+
+    <!-- Manual Items List -->
+    <div style="margin-top:1rem;border-top:1px solid var(--bdr);padding-top:.6rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+        <span style="font-size:.65rem;font-weight:600;color:var(--acc)">📋 Saved Manual Items</span>
+        <a href="/feed/manual.xml" target="_blank" class="rbtn" style="font-size:.55rem;padding:.2rem .4rem">📡 RSS</a>
+      </div>
+      <div id="manualItemsList" style="display:flex;flex-direction:column;gap:.3rem;max-height:240px;overflow-y:auto">
+        <div style="font-size:.6rem;color:var(--dim)">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let activeFeedId = null, activeFeedName = '';
+let renderedIds = [], allFeedItems = [];
+let rssItemCount = 0;
+const nextRunISO = "{{ next_run or '' }}";
+const IS_ADMIN = {{ 'true' if current_user.role in ['admin','location_admin'] else 'false' }};
+const USER_ROLE = "{{ current_user.role }}";
+let REFRESH_MINS = {{ refresh_mins }};
+let MAX_AGE_HOURS = {{ max_age_hours }};
+let nextRunMs = nextRunISO ? new Date(nextRunISO).getTime() : null;
+let currentTab = 'rss';
+let logErrors = 0;
+let feedPausedMap = {};
+
+// Init paused map from server
+{% for feed in feeds %}feedPausedMap['{{ feed.id }}'] = {{ 1 if feed.paused else 0 }};{% endfor %}
+
+// Set master URL
+window.addEventListener('load', () => {
+  document.getElementById('sMasterUrl').textContent = window.location.origin + '/feed/master.xml';
+  document.getElementById('sManualUrl').textContent = window.location.origin + '/feed/manual.xml';
+});
+
+// ── COUNTDOWN ──
+(function tick(){
+  if(nextRunMs){
+    const s = Math.max(0, Math.floor((nextRunMs - Date.now())/1000));
+    document.getElementById('countdown').textContent = Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  }
+  setTimeout(tick, 1000);
+})();
+
+// ── TAB SWITCH ──
+function switchTab(t){
+  currentTab = t;
+  document.getElementById('rssTab').style.display      = t==='rss'      ? 'flex'   : 'none';
+  document.getElementById('consoleTab').style.display  = t==='log'      ? 'block'  : 'none';
+  const pendingTab = document.getElementById('pendingTab');
+  if(pendingTab) pendingTab.style.display = t==='pending' ? 'flex' : 'none';
+  document.getElementById('settingsTab').style.display = t==='settings' ? 'flex'   : 'none';
+  document.getElementById('tab-rss').className      = 'rtab'+(t==='rss'?      ' active':'');
+  document.getElementById('tab-log').className      = 'rtab'+(t==='log'?      ' active':'');
+  if(document.getElementById('tab-pending'))  document.getElementById('tab-pending').className  = 'rtab'+(t==='pending'?  ' active':'');
+  if(document.getElementById('tab-settings')) document.getElementById('tab-settings').className = 'rtab'+(t==='settings'? ' active':'');
+  if(t==='log'){ logErrors=0; document.getElementById('logBadge').style.display='none'; }
+  if(t==='settings'){ loadSettingsFeedPanel(); loadDriveStatus(); loadSmtpStatus(); loadUsers(); }
+  if(t==='pending'){ loadPendingItems(); }
+}
+
+// ── SETTINGS ──
+async function saveGlobalSettings(){
+  const payload = {
+    REFRESH_MINS:  parseInt(document.getElementById('cfg-refresh').value)  || 15,
+    MAX_AGE_HOURS: parseInt(document.getElementById('cfg-age').value)      || 24,
+    MAX_ITEMS:     parseInt(document.getElementById('cfg-items').value)    || 20,
+  };
+  try {
+    const res = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const d   = await res.json();
+    if(d.ok){
+      REFRESH_MINS = payload.REFRESH_MINS;
+      if(d.next_run) nextRunMs = new Date(d.next_run).getTime();
+      toast('Settings saved!', 'success');
+      log('Settings updated: '+JSON.stringify(d.updated), 'success');
+    } else { toast('Save failed','error'); }
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function loadSettingsFeedPanel(){
+  const head = document.getElementById('sfeedHead');
+  const card = document.getElementById('sfeedCard');
+  if(!activeFeedId){ head.style.display='none'; card.style.display='none'; return; }
+  head.style.display='';
+  card.style.display='';
+  document.getElementById('sfeedName').textContent = activeFeedName;
+  // Load current values
+  fetch('/api/feeds').then(r=>r.json()).then(feeds=>{
+    const feed = feeds.find(f=>f.id===activeFeedId)||{};
+    document.getElementById('sfeed-name-inp').value = feed.custom_name || feed.name || '';
+    document.getElementById('sfeed-max-inp').value  = feed.max_items || 20;
+    const paused = !!feed.paused;
+    feedPausedMap[activeFeedId] = paused ? 1 : 0;
+    const btn = document.getElementById('sfeed-pause-btn');
+    btn.textContent = paused ? '▶ Resume Feed' : '⏸ Pause Feed';
+    btn.style.color = paused ? 'var(--acc)' : '';
+  });
+}
+
+async function saveFeedName(){
+  const name = document.getElementById('sfeed-name-inp').value.trim();
+  if(!name || !activeFeedId) return;
+  await fetch('/api/feed/'+activeFeedId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+  const el = document.querySelector('#fi-'+activeFeedId+' .fi-name');
+  if(el) el.textContent = name;
+  activeFeedName = name;
+  document.getElementById('sfeedName').textContent = name;
+  toast('Renamed!', 'success');
+}
+
+async function saveFeedMax(){
+  const max_items = parseInt(document.getElementById('sfeed-max-inp').value);
+  if(!activeFeedId || isNaN(max_items)) return;
+  await fetch('/api/feed/'+activeFeedId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({max_items})});
+  toast('Max items updated!', 'success');
+}
+
+async function saveFeedPause(){
+  if(!activeFeedId) return;
+  const paused = !!feedPausedMap[activeFeedId];
+  const res = await fetch('/api/feed/'+activeFeedId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({paused: !paused})});
+  feedPausedMap[activeFeedId] = paused ? 0 : 1;
+  const fi = document.getElementById('fi-'+activeFeedId);
+  if(fi) fi.classList.toggle('fi-paused', !paused);
+  const btn = document.getElementById('sfeed-pause-btn');
+  btn.textContent = paused ? '⏸ Pause Feed' : '▶ Resume Feed';
+  btn.style.color = paused ? '' : 'var(--acc)';
+  // Update left panel pause button
+  const pbtn = document.querySelector('#fi-'+activeFeedId+' .fi-acts .btiny:nth-child(3)');
+  if(pbtn){ pbtn.textContent = paused ? '⏸' : '▶'; pbtn.title = paused ? 'Pause' : 'Resume'; }
+  toast(paused ? 'Feed resumed' : 'Feed paused', 'success');
+}
+
+async function togglePauseFeed(feedId, btn){
+  const paused = !!feedPausedMap[feedId];
+  await fetch('/api/feed/'+feedId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({paused: !paused})});
+  feedPausedMap[feedId] = paused ? 0 : 1;
+  const fi = document.getElementById('fi-'+feedId);
+  if(fi) fi.classList.toggle('fi-paused', !paused);
+  btn.textContent = paused ? '⏸' : '▶';
+  btn.title = paused ? 'Pause' : 'Resume';
+  toast(paused ? 'Feed resumed' : 'Feed paused', 'success');
+  if(currentTab === 'settings' && feedId === activeFeedId) loadSettingsFeedPanel();
+}
+
+// ── CONSOLE ──
+function log(msg, type='default', icon=''){
+  const c = document.getElementById('consoleTab');
+  const ic = icon||({success:'✓',error:'✗',warn:'!',info:'›',article:'↓'}[type]||'·');
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const el = document.createElement('div');
+  el.className = 'clog '+type;
+  el.innerHTML = `<span class="clog-ts">${ts}</span><span class="clog-ic">${ic}</span><span class="clog-tx">${esc(msg)}</span>`;
+  c.appendChild(el);
+  c.scrollTop = c.scrollHeight;
+  if(currentTab!=='log' && (type==='error'||type==='warn')){
+    logErrors++;
+    const b = document.getElementById('logBadge');
+    b.textContent = logErrors; b.style.display='';
+  }
+}
+
+// ── PROGRESS BAR ──
+function setProg(p){ document.getElementById('pbar').style.width = p+'%'; }
+
+// ── STATUS ──
+function setStatus(t, c='var(--muted)'){
+  const el = document.getElementById('statusLbl');
+  el.textContent = t; el.style.color = c;
+}
+
+// ── SSE ──
+const evtSrc = new EventSource('/api/events');
+evtSrc.addEventListener('refresh_start', ()=>{
+  setStatus('Auto-refreshing…','var(--amber)');
+  log('Auto-refresh started','warn');
+  document.querySelectorAll('.fi:not(.fi-paused)').forEach(el=>el.classList.add('refreshing'));
+  document.getElementById('liveIndicator').style.display='flex';
+});
+evtSrc.addEventListener('feed_refreshed', e=>{
+  const d = JSON.parse(e.data);
+  const fi = document.getElementById('fi-'+d.id); if(!fi) return;
+  fi.classList.remove('refreshing');
+  const dot = document.getElementById('fdot-'+d.id);
+  if(d.status==='error'){
+    fi.classList.add('error'); if(dot) dot.className='fi-dot error';
+    log('Error refreshing feed: '+d.error,'error');
+  } else {
+    fi.classList.remove('error'); if(dot) dot.className='fi-dot ok';
+    const cnt = document.getElementById('fcnt-'+d.id);
+    if(cnt && d.item_count!==undefined) cnt.textContent = d.item_count;
+    const lf = document.getElementById('flf-'+d.id);
+    if(lf && d.last_fetched) lf.textContent = d.last_fetched.slice(0,16).replace('T',' ');
+    if(d.added > 0){
+      log('+'+d.added+' new articles in feed','success');
+      showNewBadge(d.id, d.added);
+      if(d.id===activeFeedId){ loadArticles(activeFeedId,activeFeedName); loadRssPanel(activeFeedId); }
+    }
+  }
+});
+evtSrc.addEventListener('refresh_done', e=>{
+  const d = JSON.parse(e.data);
+  setStatus('Idle','var(--muted)');
+  document.querySelectorAll('.fi').forEach(el=>el.classList.remove('refreshing'));
+  document.getElementById('liveIndicator').style.display='none';
+  if(d.next) nextRunMs = new Date(d.next).getTime();
+  log('All feeds refreshed','success');
+  toast('Auto-refresh complete','success');
+});
+
+function showNewBadge(feedId, count){
+  const fi = document.getElementById('fi-'+feedId); if(!fi) return;
+  let badge = fi.querySelector('.fi-new-badge');
+  if(!badge){ badge = document.createElement('span'); badge.className='fi-new-badge'; fi.querySelector('.fi-r2').appendChild(badge); }
+  badge.textContent = '+'+count+' new';
+  clearTimeout(badge._t);
+  badge._t = setTimeout(()=>badge.remove(), 8000);
+}
+
+// ── QUICK SCRAPE ──
+document.getElementById('quickUrl')?.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){e.preventDefault();quickScrape();}
+});
+async function quickScrape(){
+  const url = document.getElementById('quickUrl').value.trim();
+  if(!url){toast('Paste a URL first','error');return;}
+  await doScrape([url],'',20);
+  document.getElementById('quickUrl').value='';
+}
+async function runBulk(){
+  const raw = document.getElementById('bulkUrls').value.trim();
+  if(!raw){toast('No URLs entered','error');return;}
+  const urls = raw.split(/[\n,]+/).map(u=>u.trim()).filter(Boolean);
+  const name = document.getElementById('customName').value.trim();
+  const max = parseInt(document.getElementById('maxItems').value);
+  closeDrawer();
+  await doScrape(urls, name, max);
+}
+
+async function doScrape(urls, name, maxItems){
+  const btn = document.getElementById('goBtn'), ico = document.getElementById('goIco');
+  btn.disabled=true; ico.textContent='⟳'; ico.className='spin';
+  setStatus('Scraping…','var(--acc)');
+  setProg(2);
+  document.getElementById('liveIndicator').style.display='flex';
+  document.getElementById('welcomeMsg')?.remove();
+  document.getElementById('stream').innerHTML='';
+  renderedIds=[]; allFeedItems=[];
+  document.getElementById('artBadge').textContent='0';
+  switchTab('log');
+  log('Starting — '+urls.length+' URL(s)','info');
+
+  let lastId=null, lastName='';
+  for(let i=0; i<urls.length; i++){
+    const url = urls[i];
+    setProg(5 + Math.round((i/urls.length)*88));
+    log('['+(i+1)+'/'+urls.length+'] '+url,'info');
+    try{
+      const res = await fetch('/api/fetch',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({urls:[url], name, max_items:maxItems})
+      });
+      const data = await res.json();
+      const r = (data.results||[])[0];
+      if(!r||!r.ok){ log('✗ '+(r?.error||'Failed'),'error'); continue; }
+      log('✓ '+r.feed_name+' — '+r.added+' articles added','success');
+      addFeedCard(r.feed_id, r.feed_name, url, r.added);
+      lastId=r.feed_id; lastName=r.feed_name;
+    } catch(e){ log('✗ Network: '+e.message,'error'); }
+  }
+
+  setProg(100); setTimeout(()=>setProg(0), 600);
+  btn.disabled=false; ico.textContent='⚡'; ico.className='';
+  setStatus('Idle','var(--muted)');
+  document.getElementById('liveIndicator').style.display='none';
+  log('Done.','success');
+  toast('Feeds ready!','success');
+  if(lastId){ selectFeed(lastId, lastName); switchTab('rss'); }
+}
+
+// ── SELECT FEED ──
+function selectFeed(feedId, feedName){
+  document.querySelectorAll('.fi').forEach(c=>c.classList.remove('active'));
+  document.getElementById('fi-'+feedId)?.classList.add('active');
+  activeFeedId=feedId; activeFeedName=feedName;
+  document.getElementById('welcomeMsg')?.remove();
+  loadArticles(feedId, feedName);
+  loadRssPanel(feedId);
+  if(currentTab === 'settings') loadSettingsFeedPanel();
+}
+
+// ── LOAD ARTICLES ──
+async function loadArticles(feedId, feedName, append=false){
+  try{
+    const items = await fetch('/api/items/'+feedId).then(r=>r.json());
+    document.getElementById('artLabel').textContent = feedName||'Articles';
+    document.getElementById('artBadge').textContent = items.length;
+    const stream = document.getElementById('stream');
+    if(!append){ stream.innerHTML=''; renderedIds=[]; allFeedItems=[]; }
+    items.forEach(item=>{
+      if(renderedIds.includes(item.id)) return;
+      renderedIds.push(item.id);
+      allFeedItems.push(item);
+      log('↓ '+(item.title||'Untitled'),'article');
+      stream.insertBefore(buildCard(item), stream.firstChild);
+    });
+    if(items.length===0)
+      stream.innerHTML='<div class="welcome"><div class="wico">📭</div><div class="wtitle">No articles yet</div><div class="wsub">Try refreshing the feed.</div></div>';
+  } catch(e){ log('Load failed: '+e.message,'error'); }
+}
+
+function imgSrc(raw){
+  if(!raw) return '';
+  return '/api/imgproxy?url='+encodeURIComponent(raw);
+}
+
+function buildCard(item){
+  const card = document.createElement('div');
+  card.className='acard fresh'; card.id='ac-'+item.id;
+  setTimeout(()=>card.classList.remove('fresh'), 3000);
+  const src = item.publisher || safeHost(item.link);
+  const dateStr = item.pub_date_iso || item.pub_date || item.fetched_at;
+  const ago = dateStr ? timeAgo(new Date(dateStr)) : '';
+  const raw = item.description||'';
+  const desc = raw.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+  const shortDesc = desc.length>160 ? desc.slice(0,157)+'…' : desc;
+  const iid='i'+item.id.replace(/-/g,''), pid='p'+item.id.replace(/-/g,'');
+  const proxyImg = item.image ? imgSrc(item.image) : '';
+  const imgH = proxyImg
+    ? `<img id="${iid}" class="ath" src="${esc(proxyImg)}" referrerpolicy="no-referrer" onerror="this.style.display='none';document.getElementById('${pid}').style.display='flex'" alt=""/><div id="${pid}" class="aph" style="display:none">📰</div>`
+    : `<div class="aph">📰</div>`;
+  const feedId = item.feed_id || activeFeedId;
+  // Serialise item for inline edit — omit body_html to avoid JSON-in-HTML issues
+  const itemMini = JSON.stringify({id:item.id,title:item.title||'',description:item.description||'',author:item.author||'',image:item.image||'',categories:item.categories||'[]',pub_date_iso:item.pub_date_iso||''}).replace(/'/g,'&#39;');
+  card.innerHTML=`${imgH}
+    <div class="abody">
+      <div class="asrc">${esc(src)}<span class="npill">NEW</span></div>
+      <div class="atitle"><a href="${esc(item.link||'#')}" target="_blank" rel="noopener">${esc(item.title||'Untitled')}</a></div>
+      ${shortDesc?`<div class="adesc">${esc(shortDesc)}</div>`:''}
+      <div class="ameta">
+        ${item.author?`<span class="au">${esc(item.author)}</span>`:''}
+        ${item.author&&ago?'<span>·</span>':''}
+        <span>${ago}</span>
+        ${IS_ADMIN ? `<span style="margin-left:auto;display:flex;gap:.2rem">
+          <button class="btiny" title="Edit article" onclick='openScrapedEdit(${itemMini})' style="font-size:.52rem;padding:.08rem .3rem">✏️</button>
+          <button class="btiny del" title="Delete article" onclick="deleteScrapedItem('${item.id}','${feedId}')" style="font-size:.52rem;padding:.08rem .3rem">🗑</button>
+        </span>` : ''}
+      </div>
+    </div>`;
+  return card;
+}
+
+// ── RSS PANEL ──
+async function loadRssPanel(feedId){
+  const tab = document.getElementById('rssTab');
+  try{
+    const [feedsRes, itemsRes] = await Promise.all([
+      fetch('/api/feeds').then(r=>r.json()),
+      fetch('/api/items/'+feedId).then(r=>r.json())
+    ]);
+    const feed = (feedsRes||[]).find(f=>f.id===feedId)||{};
+    const rssUrl = window.location.origin+'/feed/'+feedId+'.xml';
+    const masterUrl = window.location.origin+'/feed/master.xml';
+    tab.innerHTML='';
+    rssItemCount = itemsRes.length;
+
+    // Master feed banner
+    const masterCard = document.createElement('div');
+    masterCard.style.cssText='background:rgba(79,255,176,.07);border:1px solid rgba(79,255,176,.25);border-radius:9px;padding:.65rem .8rem;flex-shrink:0;margin-bottom:.1rem';
+    masterCard.innerHTML=`
+      <div style="font-family:var(--mono);font-size:.56rem;color:var(--acc);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.3rem">⚡ MASTER FEED — All sources combined</div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--blue);word-break:break-all;margin-bottom:.4rem;opacity:.85">${masterUrl}</div>
+      <div style="font-size:.62rem;color:var(--muted);margin-bottom:.4rem">Permanent URL · Last 24h · Auto-updates every ${REFRESH_MINS} min · All fields (title, body, author, image, categories)</div>
+      <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+        <button class="rbtn primary" style="font-size:.58rem" onclick="copyText('${masterUrl}',this)">Copy Master URL</button>
+        <button class="rbtn" style="font-size:.58rem" onclick="window.open('${masterUrl}','_blank')">View XML</button>
+      </div>`;
+    tab.appendChild(masterCard);
+
+    // Header card
+    const hc = document.createElement('div');
+    hc.className='rss-header-card';
+    hc.innerHTML=`
+      <div class="rhc-top">
+        <div class="rhc-name">${esc(feed.custom_name||feed.name||activeFeedName)}</div>
+        <div class="rhc-count" id="rssLiveCount">${rssItemCount} items</div>
+      </div>
+      <div class="rhc-url">${rssUrl}</div>
+      <div class="rhc-btns">
+        <button class="rbtn primary" onclick="copyText('${rssUrl}',this)">Copy RSS URL</button>
+        <button class="rbtn" onclick="window.open('${rssUrl}','_blank')">View XML</button>
+        <button class="rbtn" onclick="window.open('/feed/${feedId}','_blank')">Preview</button>
+        <button class="rbtn" onclick="switchTab('settings')">⚙ Feed Settings</button>
+      </div>`;
+    tab.appendChild(hc);
+
+    // Live counter strip
+    const strip = document.createElement('div');
+    strip.className='rss-live-strip';
+    strip.innerHTML=`
+      <div class="rls-label"><div class="rls-dot"></div>Live article count</div>
+      <div class="rls-right">
+        <div class="rls-count" id="rlsCount">${rssItemCount}</div>
+        <div class="rls-sub">articles in feed</div>
+      </div>`;
+    tab.appendChild(strip);
+
+    if(!itemsRes.length){
+      const em = document.createElement('div');
+      em.className='rss-empty'; em.textContent='No items yet. Scrape to populate.';
+      tab.appendChild(em); return;
+    }
+    itemsRes.forEach((item,i)=> tab.appendChild(buildRssItem(item, i, true)));
+  } catch(e){ tab.innerHTML='<div class="rss-empty">Failed to load RSS panel.</div>'; log('RSS panel error: '+e.message,'error'); }
+}
+
+function buildRssItem(item, index, isFresh=false){
+  const el = document.createElement('div');
+  el.className='ritem'+(isFresh?' fresh-rss':'');
+  el.id='ri-'+item.id;
+  if(isFresh) setTimeout(()=>el.classList.remove('fresh-rss'), 3000);
+  const src = item.publisher || safeHost(item.link);
+  const dateStr2 = item.pub_date_iso || item.pub_date || item.fetched_at;
+  const ago = dateStr2 ? timeAgo(new Date(dateStr2)) : '';
+  const num = typeof index==='number' ? index+1 : '—';
+  const feedId = item.feed_id || activeFeedId;
+  const itemMini = JSON.stringify({id:item.id,title:item.title||'',description:item.description||'',author:item.author||'',image:item.image||'',categories:item.categories||'[]',pub_date_iso:item.pub_date_iso||''}).replace(/'/g,'&#39;');
+  el.innerHTML=`
+    <div class="ri-num">#${num}</div>
+    <div class="ri-title"><a href="${esc(item.link||'#')}" target="_blank" rel="noopener">${esc(item.title||'Untitled')}</a></div>
+    <div class="ri-meta">
+      <span class="ri-new">RSS</span>
+      <span>${esc(src)}</span>
+      ${item.author?`<span>·</span><span>${esc(item.author)}</span>`:''}
+      ${ago?`<span>·</span><span>${ago}</span>`:''}
+      ${IS_ADMIN ? `<span style="margin-left:auto;display:flex;gap:.2rem">
+        <button class="btiny" title="Edit" onclick='openScrapedEdit(${itemMini})' style="font-size:.5rem;padding:.06rem .28rem">✏️</button>
+        <button class="btiny del" title="Delete" onclick="deleteScrapedItem('${item.id}','${feedId}')" style="font-size:.5rem;padding:.06rem .28rem">🗑</button>
+      </span>` : ''}
+    </div>`;
+  return el;
+}
+
+// ── ADD FEED CARD TO LEFT PANEL ──
+function addFeedCard(id, name, sourceUrl, count){
+  document.getElementById('emptyFeeds')?.remove();
+  if(document.getElementById('fi-'+id)){
+    const c = document.getElementById('fcnt-'+id); if(c) c.textContent=count; return;
+  }
+  feedPausedMap[id] = 0;
+  const list = document.getElementById('feedList');
+  const el = document.createElement('div');
+  el.className='fi'; el.id='fi-'+id; el.onclick=()=>selectFeed(id,name);
+  el.innerHTML=`
+    <div class="fi-r1">
+      <div class="fi-fav"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(sourceUrl)}&sz=32" onerror="this.parentNode.innerHTML='📡'" alt=""/></div>
+      <div class="fi-name">${esc(name)}</div>
+      <div class="fi-dot ok" id="fdot-${id}"></div>
+    </div>
+    <div class="fi-r2">
+      <span class="fi-cnt" id="fcnt-${id}">${count}</span><span>articles</span>
+      <span>·</span><span id="flf-${id}">just now</span>
+    </div>
+    <div class="fi-acts" onclick="event.stopPropagation()">
+      <button class="btiny" onclick="copyRss('${id}',this)" title="Copy RSS feed URL">📋 RSS</button>
+      <button class="btiny" id="rfb-${id}" onclick="refreshFeed('${id}',this)">↻</button>
+      <button class="btiny" onclick="togglePauseFeed('${id}',this)" title="Pause">⏸</button>
+      <button class="btiny del" onclick="deleteFeed('${id}')">✕</button>
+    </div>`;
+  list.insertBefore(el, list.firstChild);
+  const b = document.getElementById('feedCount');
+  b.textContent = parseInt(b.textContent||0)+1;
+}
+
+// ── REFRESH FEED ──
+async function refreshFeed(feedId, btn){
+  const orig = btn.textContent; btn.textContent='⟳'; btn.disabled=true; btn.classList.add('spin');
+  const fi = document.getElementById('fi-'+feedId); fi?.classList.add('refreshing');
+  const dot = document.getElementById('fdot-'+feedId); if(dot) dot.className='fi-dot refreshing';
+  log('Refreshing feed…','info');
+  try{
+    const res = await fetch('/api/refresh/'+feedId,{method:'POST'});
+    const d = await res.json();
+    if(res.ok){
+      if(dot) dot.className='fi-dot ok'; fi?.classList.remove('refreshing','error');
+      const lf = document.getElementById('flf-'+feedId); if(lf) lf.textContent='just now';
+      const cnt = document.getElementById('fcnt-'+feedId); if(cnt) cnt.textContent=d.total;
+      log('+'+d.added+' new · '+d.total+' total','success');
+      toast('+'+d.added+' new articles','success');
+      if(d.added>0) showNewBadge(feedId, d.added);
+      if(feedId===activeFeedId){ loadArticles(feedId,activeFeedName); loadRssPanel(feedId); }
+    } else {
+      if(dot) dot.className='fi-dot error'; fi?.classList.add('error');
+      log('Error: '+(d.error||'?'),'error'); toast(d.error||'Failed','error');
+    }
+  } catch(e){ log('Network error: '+e.message,'error'); toast('Network error','error'); }
+  finally{ btn.textContent=orig; btn.disabled=false; btn.classList.remove('spin'); fi?.classList.remove('refreshing'); }
+}
+
+// ── DELETE FEED ──
+async function deleteFeed(feedId){
+  if(!confirm('Delete this feed and all its articles?')) return;
+  await fetch('/api/delete/'+feedId,{method:'DELETE'});
+  document.getElementById('fi-'+feedId)?.remove();
+  const b = document.getElementById('feedCount'); b.textContent=Math.max(0,parseInt(b.textContent||1)-1);
+  if(!document.querySelectorAll('.fi').length)
+    document.getElementById('feedList').innerHTML='<div class="empty-feeds" id="emptyFeeds">📡<br/><br/>No feeds yet.<br/>Paste a URL above.</div>';
+  if(feedId===activeFeedId){
+    activeFeedId=null; activeFeedName='';
+    document.getElementById('stream').innerHTML='<div class="welcome"><div class="wico">📰</div><div class="wtitle">Select a feed</div></div>';
+    document.getElementById('rssTab').innerHTML='<div class="rss-empty" id="rssEmpty">Select a feed to see<br/>its live RSS items here.</div>';
+    document.getElementById('sfeedHead').style.display='none';
+    document.getElementById('sfeedCard').style.display='none';
+  }
+}
+
+// ── COPY ──
+function _writeClipboard(text, btn, successMsg, toastMsg){
+  const restore = btn ? btn.textContent : '';
+  function onSuccess(){
+    if(btn){ btn.textContent = successMsg || 'Copied!'; setTimeout(()=>btn.textContent=restore, 1600); }
+    toast(toastMsg || 'Copied!', 'success');
+  }
+  function onFail(){
+    // Fallback: create a temporary textarea and use execCommand
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onSuccess();
+    } catch(e){
+      // Last resort: show the URL in a prompt so user can copy manually
+      window.prompt('Copy this URL (Ctrl+C / Cmd+C):', text);
+    }
+  }
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(onSuccess).catch(onFail);
+  } else {
+    onFail();
+  }
+}
+function copyRss(feedId, btn){
+  const url = window.location.origin+'/feed/'+feedId+'.xml';
+  _writeClipboard(url, btn, '✓', 'RSS URL copied!');
+}
+function copyText(text, btn){
+  _writeClipboard(text, btn, 'Copied!', 'Copied!');
+}
+
+// ── FILTER / SORT ──
+function doFilter(){
+  const q = document.getElementById('filterInp').value.toLowerCase();
+  document.querySelectorAll('.acard').forEach(c=>{
+    c.style.display = c.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function doSort(){
+  const v = document.getElementById('sortSel').value;
+  const s = document.getElementById('stream');
+  const cards = [...s.querySelectorAll('.acard')];
+  cards.sort((a,b)=>{
+    if(v==='title') return (a.querySelector('.atitle')?.textContent||'').localeCompare(b.querySelector('.atitle')?.textContent||'');
+    const ta=a.querySelector('.ameta')?.textContent||'', tb=b.querySelector('.ameta')?.textContent||'';
+    return v==='oldest' ? ta.localeCompare(tb) : tb.localeCompare(ta);
+  });
+  cards.forEach(c=>s.appendChild(c));
+}
+
+// ── DRAWER ──
+function openDrawer(){ document.getElementById('drawer').classList.add('open'); document.getElementById('bulkUrls').focus(); }
+function closeDrawer(){ document.getElementById('drawer').classList.remove('open'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
+
+// ── TOAST ──
+let _tt;
+function toast(msg, type='info'){
+  const el = document.getElementById('toast');
+  el.className='show '+type; el.textContent=msg;
+  clearTimeout(_tt); _tt=setTimeout(()=>el.className='',3000);
+}
+
+// ── UTILS ──
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function safeHost(u){ try{return new URL(u||'http://x').hostname;}catch{return u||'';} }
+function timeAgo(d){
+  const s = Math.floor((Date.now()-d)/1000);
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+// ── DRIVE SETTINGS ──
+async function loadDriveStatus() {
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    const dot  = document.getElementById('driveStatusDot');
+    const text = document.getElementById('driveStatusText');
+    const clearBtn = document.getElementById('driveClearBtn');
+    if (!dot) return;
+    if (s.drive_configured) {
+      dot.style.background  = 'var(--grn, #3ecf8e)';
+      text.style.color      = 'var(--grn, #3ecf8e)';
+      text.textContent      = '✓ Connected — images upload to Drive automatically';
+      if (clearBtn) clearBtn.style.display = 'inline-flex';
+      // Pre-fill folder ID for reference
+      const folderInput = document.getElementById('cfg-drive-folder');
+      if (folderInput && s.drive_folder_id) folderInput.value = s.drive_folder_id;
+      if (s.drive_sa_set) {
+        const saBox = document.getElementById('cfg-drive-sa-json');
+        if (saBox && !saBox.value) saBox.placeholder = '(JSON key already saved — paste to replace)';
+      }
+    } else {
+      dot.style.background = '#f59e0b';
+      text.style.color     = '#f59e0b';
+      text.textContent     = 'Not configured — images saved locally';
+      if (clearBtn) clearBtn.style.display = 'none';
+    }
+  } catch(e) { /* ignore */ }
+}
+
+function toggleDriveForm() {
+  const form = document.getElementById('driveCredForm');
+  if (!form) return;
+  const open = form.style.display !== 'none';
+  form.style.display = open ? 'none' : 'flex';
+}
+
+async function saveDriveSettings() {
+  const folder  = document.getElementById('cfg-drive-folder')?.value.trim();
+  const saJson  = document.getElementById('cfg-drive-sa-json')?.value.trim();
+
+  if (!folder) { toast('Drive Folder ID is required', 'error'); return; }
+
+  // Basic JSON validation client-side
+  if (saJson) {
+    try {
+      const parsed = JSON.parse(saJson);
+      if (parsed.type !== 'service_account') {
+        toast('JSON does not look like a service account key (type must be "service_account")', 'error');
+        return;
+      }
+    } catch(e) {
+      toast('Invalid JSON: ' + e.message, 'error');
+      return;
+    }
+  }
+
+  const payload = { GOOGLE_DRIVE_FOLDER_ID: folder };
+  if (saJson) payload.GOOGLE_SERVICE_ACCOUNT_JSON = saJson;
+
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(d.drive_configured ? '✓ Drive configured — images will upload automatically' : 'Folder ID saved (add JSON key to enable Drive)', 'success');
+      document.getElementById('driveCredForm').style.display = 'none';
+      loadDriveStatus();
+    } else {
+      toast('Save failed: ' + (d.error || 'unknown'), 'error');
+    }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function clearDriveSettings() {
+  if (!confirm('Remove Google Drive credentials? Images will be saved locally until reconfigured.')) return;
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ GOOGLE_DRIVE_FOLDER_ID: '', GOOGLE_SERVICE_ACCOUNT_JSON: '' })
+    });
+    const saBox = document.getElementById('cfg-drive-sa-json');
+    const folderBox = document.getElementById('cfg-drive-folder');
+    if (saBox) saBox.value = '';
+    if (folderBox) folderBox.value = '';
+    toast('Drive credentials cleared', 'info');
+    loadDriveStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── SMTP SETTINGS ──
+function toggleSmtpForm() {
+  const f = document.getElementById('smtpCredForm');
+  if (f) f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+}
+
+async function loadSmtpStatus() {
+  try {
+    const r = await fetch('/api/settings'); if (!r.ok) return;
+    const d = await r.json();
+    const dot  = document.getElementById('smtpStatusDot');
+    const txt  = document.getElementById('smtpStatusText');
+    const host = document.getElementById('cfg-smtp-host');
+    const port = document.getElementById('cfg-smtp-port');
+    const user = document.getElementById('cfg-smtp-user');
+    const frm  = document.getElementById('cfg-smtp-from');
+    if (d.smtp_configured) {
+      if(dot) dot.style.background = '#4ade80';
+      if(txt) { txt.textContent = 'SMTP configured ✓'; txt.style.color = '#4ade80'; }
+    } else {
+      if(dot) dot.style.background = '#f87171';
+      if(txt) { txt.textContent = 'Not configured'; txt.style.color = '#f87171'; }
+    }
+    if(host && d.smtp_host) host.value = d.smtp_host;
+    if(port && d.smtp_port) port.value = d.smtp_port;
+    if(user && d.smtp_user) user.value = d.smtp_user;
+    if(frm  && d.smtp_from) frm.value  = d.smtp_from;
+  } catch(e) {}
+}
+
+async function saveSmtpSettings() {
+  const host = (document.getElementById('cfg-smtp-host')||{}).value || '';
+  const port = (document.getElementById('cfg-smtp-port')||{}).value || '587';
+  const user = (document.getElementById('cfg-smtp-user')||{}).value || '';
+  const pass = (document.getElementById('cfg-smtp-pass')||{}).value || '';
+  const from = (document.getElementById('cfg-smtp-from')||{}).value || '';
+  const msg  = document.getElementById('smtpSaveMsg');
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ SMTP_HOST: host, SMTP_PORT: port, SMTP_USER: user, SMTP_PASS: pass, SMTP_FROM: from })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('SMTP settings saved', 'success');
+      if(msg){ msg.textContent='✓ Saved'; msg.style.color='#4ade80'; msg.style.display='block'; setTimeout(()=>msg.style.display='none',3000); }
+      loadSmtpStatus();
+    } else { toast('Error: ' + (d.error||'unknown'), 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function testSmtp() {
+  const to = (document.getElementById('cfg-smtp-test-to')||{}).value || '';
+  if (!to) { toast('Enter a test email address first', 'info'); return; }
+  try {
+    const r = await fetch('/api/settings/smtp-test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ to })
+    });
+    const d = await r.json();
+    if (d.ok) toast('Test email sent to ' + to, 'success');
+    else toast('SMTP test failed: ' + d.error, 'error');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── USERS MANAGEMENT ──
+function showCreateUserForm() {
+  document.getElementById('createUserForm').style.display = 'block';
+  document.getElementById('cu-username').focus();
+}
+function hideCreateUserForm() {
+  document.getElementById('createUserForm').style.display = 'none';
+  ['cu-username','cu-email','cu-phone','cu-password'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  const err = document.getElementById('cu-error');
+  if(err) { err.style.display='none'; err.textContent=''; }
+  document.getElementById('cu-role').value = 'reporter';
+}
+async function submitCreateUser() {
+  const username = (document.getElementById('cu-username').value||'').trim();
+  const email    = (document.getElementById('cu-email').value||'').trim();
+  const phone    = (document.getElementById('cu-phone').value||'').trim();
+  const password = (document.getElementById('cu-password').value||'').trim();
+  const role     = document.getElementById('cu-role').value;
+  const errEl    = document.getElementById('cu-error');
+  errEl.style.display = 'none'; errEl.textContent = '';
+  if (!username || !email || !password) { errEl.textContent='Username, email and password are required.'; errEl.style.display='block'; return; }
+  try {
+    const r = await fetch('/api/auth/users', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, email, phone, password, role})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Account created for ' + username, 'success');
+      hideCreateUserForm();
+      loadUsers();
+    } else {
+      errEl.textContent = d.error || 'Failed to create account';
+      errEl.style.display = 'block';
+    }
+  } catch(e) { errEl.textContent='Error: '+e.message; errEl.style.display='block'; }
+}
+
+async function loadUsers() {
+  const list = document.getElementById('usersList');
+  if (!list) return;
+  list.innerHTML = '<div style="font-size:.62rem;color:var(--dim)">Loading…</div>';
+  try {
+    const r = await fetch('/api/auth/users');
+    if (!r.ok) { list.innerHTML = '<div style="font-size:.62rem;color:var(--red)">Unauthorized</div>'; return; }
+    const users = await r.json();
+    if (!users.length) {
+      list.innerHTML = '<div style="font-size:.62rem;color:var(--dim);text-align:center;padding:.8rem">No users yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const u of users) {
+      // Fetch location for this user
+      let hasLocation = false;
+      try {
+        const locRes = await fetch(`/api/admin-locations?user_id=${u.id}`);
+        const locs = await locRes.json();
+        hasLocation = locs.length > 0;
+      } catch(e) {}
+
+      const isSelf = u.username === '{{ current_user.username }}';
+      const joinDate = u.created_at ? new Date(u.created_at).toLocaleDateString([], {year:'numeric',month:'short',day:'numeric'}) : '—';
+      const loginMethod = u.login_method || 'username';
+      const loginBadge = loginMethod === 'gmail_registration'
+        ? '<span style="font-size:.48rem;background:rgba(66,133,244,.15);color:#4285f4;border:1px solid rgba(66,133,244,.25);border-radius:3px;padding:.05rem .25rem;margin-left:.25rem">Gmail reg</span>'
+        : loginMethod === 'admin_created'
+        ? '<span style="font-size:.48rem;background:rgba(79,255,176,.1);color:var(--acc);border:1px solid rgba(79,255,176,.2);border-radius:3px;padding:.05rem .25rem;margin-left:.25rem">Admin created</span>'
+        : '';
+      const card = document.createElement('div');
+      card.className = 'user-card';
+      card.id = 'ucard-' + u.id;
+      card.innerHTML = `
+        <div style="width:30px;height:30px;border-radius:50%;background:${['admin','location_admin'].includes(u.role)?'rgba(79,255,176,.2)':'rgba(99,179,237,.15)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">
+          ${['admin','location_admin'].includes(u.role)?'👑':'📰'}
+        </div>
+        <div class="user-card-info">
+          <div class="user-card-name">
+            ${esc(u.username)}
+            <span class="role-badge ${u.role}">${u.role.replace('_',' ')}</span>
+            ${loginBadge}
+            ${isSelf ? '<span style="font-size:.5rem;color:var(--muted);margin-left:.2rem">(you)</span>' : ''}
+          </div>
+          <div class="user-card-email">📧 ${esc(u.email)}${u.phone?` &nbsp;📱 ${esc(u.phone)}`:''}</div>
+          <div class="user-card-meta">
+            ${hasLocation ? '📍 Assigned' : 'No location assigned'}
+          </div>
+        </div>
+        <div style="display:flex;gap:.25rem;flex-shrink:0;flex-direction:column;align-items:flex-end">
+          ${!isSelf ? `
+            <button class="rbtn" style="font-size:.52rem" onclick="openUserLocationModal('${u.id}','${esc(u.username)}')">📍 Assign</button>
+            <button class="rbtn" style="font-size:.52rem;color:var(--red)" onclick="removeUserLocation('${u.id}')">🗑 Remove</button>
+            <select onchange="changeRole('${u.id}',this.value,this)" style="background:var(--s1);border:1px solid var(--bdr2);border-radius:5px;padding:.18rem .3rem;color:var(--text);font-size:.58rem;outline:none;cursor:pointer">
+              <option value="reporter" ${u.role==='reporter'?'selected':''}>Reporter</option>
+              <option value="location_admin" ${u.role==='location_admin'?'selected':''}>Location Admin</option>
+              <option value="admin" ${u.role==='admin'?'selected':''}>Admin (global)</option>
+            </select>
+            <button onclick="deleteUser('${u.id}','${esc(u.username)}')" style="font-size:.52rem;padding:.15rem .35rem;background:transparent;border:1px solid rgba(255,69,96,.3);color:var(--red);border-radius:5px;cursor:pointer">🗑 Remove</button>
+          ` : '<span style="font-size:.52rem;color:var(--dim)">current session</span>'}
+        </div>`;
+      list.appendChild(card);
+    }
+  } catch(e) { list.innerHTML = '<div style="font-size:.62rem;color:var(--red)">Error: ' + e.message + '</div>'; }
+}
+
+async function changeRole(userId, newRole, sel) {
+  try {
+    const r = await fetch('/api/auth/users/' + userId, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({role: newRole})
+    });
+    const d = await r.json();
+    if (d.ok !== false) { toast('Role updated to ' + newRole, 'success'); loadUsers(); }
+    else toast('Error updating role', 'error');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function deleteUser(userId, username) {
+  if (!confirm(`Remove user "${username}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch('/api/auth/users/' + userId, {method: 'DELETE'});
+    if (r.ok) { toast('User removed', 'info'); loadUsers(); }
+    else toast('Cannot delete this user', 'error');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── MANUAL NEWS ──
+let editingManualId = null;
+let _locationData = { countries: [], provinces: [], districts: [], localLevels: [], wards: [] };
+let _manualLocationWired = false;
+let _mnItems = [];
+
+async function _loadJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Failed to load ' + url);
+  return await r.json();
+}
+
+function _setSelectOptions(sel, items, placeholder, valueKey='id', labelKey='name') {
+  if (!sel) return;
+  sel.innerHTML = '';
+  const p = document.createElement('option');
+  p.value = '';
+  p.textContent = placeholder;
+  sel.appendChild(p);
+  items.forEach(it => {
+    const o = document.createElement('option');
+    o.value = it[valueKey];
+    o.textContent = it[labelKey] || it.name || it.nepali_name || it.title || '';
+    sel.appendChild(o);
+  });
+}
+
+async function refreshLocationSelectors() {
+  try {
+    _locationData.countries = await _loadJSON('/api/locations/countries');
+    _setSelectOptions(document.getElementById('mn-country'), _locationData.countries, 'Country');
+    const nepal = _locationData.countries.find(x => (x.code||'').toUpperCase() === 'NP') || _locationData.countries[0];
+    if (nepal) document.getElementById('mn-country').value = nepal.id;
+    await onCountryChange();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function onCountryChange() {
+  const countryId = document.getElementById('mn-country')?.value || '';
+  try {
+    _locationData.provinces = await _loadJSON('/api/locations/provinces?country_id=' + encodeURIComponent(countryId));
+    _setSelectOptions(document.getElementById('mn-province'), _locationData.provinces, 'Province/State');
+    await onProvinceChange();
+  } catch(e) { console.error(e); }
+  updateLocationPreview();
+}
+
+async function onProvinceChange() {
+  const provinceId = document.getElementById('mn-province')?.value || '';
+  try {
+    _locationData.districts = await _loadJSON('/api/locations/districts?province_id=' + encodeURIComponent(provinceId));
+    _setSelectOptions(document.getElementById('mn-district'), _locationData.districts, 'District');
+    await onDistrictChange();
+  } catch(e) { console.error(e); }
+  updateLocationPreview();
+}
+
+async function onDistrictChange() {
+  const districtId = document.getElementById('mn-district')?.value || '';
+  try {
+    _locationData.localLevels = await _loadJSON('/api/locations/local-levels?district_id=' + encodeURIComponent(districtId));
+    _setSelectOptions(document.getElementById('mn-local-level'), _locationData.localLevels, 'Local Level');
+    await onLocalLevelChange();
+  } catch(e) { console.error(e); }
+  updateLocationPreview();
+}
+
+async function onLocalLevelChange() {
+  const llId = document.getElementById('mn-local-level')?.value || '';
+  try {
+    _locationData.wards = await _loadJSON('/api/locations/wards?local_level_id=' + encodeURIComponent(llId));
+    _setSelectOptions(document.getElementById('mn-ward'), _locationData.wards, 'Ward No.', 'id', 'ward_number');
+    const wardSel = document.getElementById('mn-ward');
+    if (!wardSel.options.length || wardSel.options.length < 2) {
+      wardSel.innerHTML = '<option value="">Ward No.</option>';
+      for (let i=1; i<=35; i++) {
+        const o = document.createElement('option');
+        o.value = i;
+        o.textContent = 'Ward ' + i;
+        wardSel.appendChild(o);
+      }
+    }
+  } catch(e) { console.error(e); }
+  updateLocationPreview();
+}
+
+function updateLocationPreview() {
+  // Only used when location selectors are visible (admin only)
+  if (USER_ROLE !== 'admin' && USER_ROLE !== 'location_admin') return;
+  const country = document.getElementById('mn-country')?.selectedOptions?.[0]?.textContent || '';
+  const province = document.getElementById('mn-province')?.selectedOptions?.[0]?.textContent || '';
+  const district = document.getElementById('mn-district')?.selectedOptions?.[0]?.textContent || '';
+  const ll = document.getElementById('mn-local-level')?.selectedOptions?.[0]?.textContent || '';
+  const ward = document.getElementById('mn-ward')?.selectedOptions?.[0]?.textContent || '';
+  const area = document.getElementById('mn-area')?.value?.trim() || '';
+  const parts = [];
+  if (area) parts.push(area);
+  if (ward) parts.push(ward);
+  if (ll) parts.push(ll);
+  if (district) parts.push(district);
+  if (province) parts.push(province);
+  if (country) parts.push(country);
+  const label = parts.filter(Boolean).join(', ');
+  const out = document.getElementById('mn-location');
+  if (out) out.value = label;
+}
+
+function wireLocationSelectors() {
+  if (_manualLocationWired) return;
+  _manualLocationWired = true;
+  ['mn-country','mn-province','mn-district','mn-local-level','mn-ward','mn-area'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, async () => {
+      if (id === 'mn-country') await onCountryChange();
+      else if (id === 'mn-province') await onProvinceChange();
+      else if (id === 'mn-district') await onDistrictChange();
+      else if (id === 'mn-local-level') await onLocalLevelChange();
+      else updateLocationPreview();
+    });
+  });
+}
+
+function initManualLocationUI() {
+  wireLocationSelectors();
+  if (USER_ROLE === 'admin' || USER_ROLE === 'location_admin') {
+    refreshLocationSelectors();
+  } else {
+    // For reporters: just show the read-only label
+    const locInput = document.getElementById('mn-location');
+    if (locInput) locInput.value = "{{ user_location_label or 'No location assigned' }}";
+  }
+}
+
+function gatherManualLocationPayload() {
+  // For admin: get from selects; for reporters: use hidden fields (or ignore)
+  if (USER_ROLE === 'admin' || USER_ROLE === 'location_admin') {
+    const countryId = document.getElementById('mn-country')?.value || '';
+    const provinceId = document.getElementById('mn-province')?.value || '';
+    const districtId = document.getElementById('mn-district')?.value || '';
+    const localLevelId = document.getElementById('mn-local-level')?.value || '';
+    const wardId = document.getElementById('mn-ward')?.value || '';
+    const area = document.getElementById('mn-area')?.value.trim() || '';
+    return {countryId, provinceId, districtId, localLevelId, wardId, area};
+  } else {
+    // Reporters: location is auto-assigned by backend; we send empty values
+    return {countryId: '', provinceId: '', districtId: '', localLevelId: '', wardId: '', area: ''};
+  }
+}
+
+function openManual(id=null) {
+  editingManualId = id;
+  document.getElementById('manualDrawer').style.display = 'flex';
+  document.getElementById('manualDrawerTitle').textContent = id ? '✏️ Edit Manual News' : '✏️ Add News Manually';
+  initManualLocationUI();
+  if (!id) {
+    clearManualForm();
+    setManualDateNow();
+    setManualTimeNow();
+  }
+  renderManualModalList();
+}
+
+let _draftItemId = null;
+
+function closeManual() {
+  document.getElementById('manualDrawer').style.display = 'none';
+  if (_draftItemId && _draftItemId === editingManualId) {
+    fetch(`/api/manual-items/${_draftItemId}`, {method:'DELETE'}).catch(()=>{});
+  }
+  _draftItemId   = null;
+  editingManualId = null;
+}
+
+function clearManualForm() {
+  ['mn-title','mn-description','mn-body','mn-category','mn-tags',
+   'mn-source-name','mn-source-url','mn-creator','mn-link',
+   'mn-image-url','mn-pub-date','mn-pub-time','mn-location','mn-country','mn-province','mn-district','mn-local-level','mn-ward','mn-area',
+   'mn-submitted-by','mn-reporter-phone','mn-reporter-email','mn-reporter-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const prev = document.getElementById('mn-image-preview');
+  prev.style.display = 'none'; prev.src = '';
+}
+
+function setManualDateNow() {
+  const now = new Date();
+  document.getElementById('mn-pub-date').value =
+    now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0');
+}
+
+function setManualTimeNow() {
+  const now = new Date();
+  document.getElementById('mn-pub-time').value =
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0');
+}
+
+function previewManualImage() {
+  const url = document.getElementById('mn-image-url').value.trim();
+  const prev = document.getElementById('mn-image-preview');
+  if (url) { prev.src = url; prev.style.display = 'block'; }
+  else      { prev.style.display = 'none'; prev.src = ''; }
+}
+
+async function handleManualImageUpload() {
+  const file = document.getElementById('mn-image-file').files[0];
+  if (!file) return;
+
+  const uploadLabel = document.querySelector('#mn-image-file').closest('label');
+
+  if (editingManualId) {
+    uploadLabel && (uploadLabel.textContent = '⏳');
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('title', document.getElementById('mn-title').value.trim());
+    const r = await fetch(`/api/manual-items/${editingManualId}/upload-image`, {method:'POST', body:fd});
+    const j = await r.json();
+    uploadLabel && (uploadLabel.innerHTML = '📁 Upload<input type="file" id="mn-image-file" accept="image/*" style="display:none" onchange="handleManualImageUpload()"/>');
+    if (j.ok) {
+      document.getElementById('mn-image-url').value = j.url;
+      previewManualImage();
+      toast('Image uploaded ✓' + (j.via_drive ? ' → Google Drive' : ' (local)'), 'success');
+    } else {
+      toast('Image upload failed: ' + (j.error||'?'), 'error');
+    }
+  } else {
+    uploadLabel && (uploadLabel.innerHTML = '⏳ Uploading…<input type="file" id="mn-image-file" accept="image/*" style="display:none" onchange="handleManualImageUpload()"/>');
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('title', document.getElementById('mn-title').value.trim());
+    const r = await fetch('/api/manual-items/upload-image-new', {method:'POST', body:fd});
+    const j = await r.json();
+    uploadLabel && (uploadLabel.innerHTML = '📁 Upload<input type="file" id="mn-image-file" accept="image/*" style="display:none" onchange="handleManualImageUpload()"/>');
+    if (j.ok) {
+      editingManualId = j.item_id;
+      _draftItemId    = j.item_id;
+      document.getElementById('mn-image-url').value = j.url;
+      previewManualImage();
+      toast('Image uploaded ✓' + (j.via_drive ? ' → Google Drive' : ' (local)'), 'success');
+    } else {
+      toast('Image upload failed: ' + (j.error||'?'), 'error');
+    }
+  }
+}
+
+function pickFromDrive() {
+  const url = prompt(
+    'Paste a Google Drive shareable image link:\n\n' +
+    'Option A — Direct view link:\n  https://drive.google.com/uc?export=view&id=YOUR_FILE_ID\n\n' +
+    'Option B — Standard share link (auto-converted):\n  https://drive.google.com/file/d/YOUR_FILE_ID/view\n\n' +
+    'Tip: Right-click the file in Drive → Get link → Anyone with the link → Copy'
+  );
+  if (!url) return;
+  let finalUrl = url.trim();
+  const m = finalUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) {
+    finalUrl = `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    toast('Converted to direct Drive URL ✓', 'info');
+  }
+  document.getElementById('mn-image-url').value = finalUrl;
+  previewManualImage();
+}
+
+async function saveManualNews() {
+  const title = document.getElementById('mn-title').value.trim();
+  if (!title) { toast('Title is required', 'error'); document.getElementById('mn-title').focus(); return; }
+
+  const submitted_by = document.getElementById('mn-submitted-by').value.trim();
+  const reporter_phone = document.getElementById('mn-reporter-phone').value.trim();
+  const reporter_email = document.getElementById('mn-reporter-email').value.trim();
+
+  if (!submitted_by) { toast('Reporter Name is required', 'error'); document.getElementById('mn-submitted-by').focus(); return; }
+  if (!reporter_phone) { toast('Phone number is required', 'error'); document.getElementById('mn-reporter-phone').focus(); return; }
+  if (!reporter_email) { toast('Email is required', 'error'); document.getElementById('mn-reporter-email').focus(); return; }
+
+  const btn = document.getElementById('mnSaveBtn');
+  btn.disabled = true;
+  document.getElementById('mnSaveIco').textContent = '⏳';
+  document.getElementById('mnSaveLbl').textContent = ' Saving…';
+
+  let pubDateIso = '';
+  const d = document.getElementById('mn-pub-date').value;
+  const t = document.getElementById('mn-pub-time').value;
+  if (d) pubDateIso = d + (t ? 'T' + t + ':00' : 'T00:00:00');
+
+  const {countryId, provinceId, districtId, localLevelId, wardId, area} = gatherManualLocationPayload();
+
+  const payload = {
+    title,
+    description: document.getElementById('mn-description').value.trim(),
+    body_html:   document.getElementById('mn-body').value.trim(),
+    category:    document.getElementById('mn-category').value.split(/[,;]/)[0].trim(),
+    tags:        document.getElementById('mn-tags').value.trim(),
+    source_name: document.getElementById('mn-source-name').value.trim(),
+    source_url:  document.getElementById('mn-source-url').value.trim(),
+    creator:     document.getElementById('mn-creator').value.trim(),
+    link:        document.getElementById('mn-link').value.trim(),
+    image:       document.getElementById('mn-image-url').value.trim(),
+    pub_date_iso: pubDateIso,
+    location:    document.getElementById('mn-location').value.trim(),
+    submitted_by,
+    reporter_phone,
+    reporter_email,
+    country_id:   countryId || null,
+    province_id:  provinceId || null,
+    district_id:  districtId || null,
+    local_level_id: localLevelId || null,
+    ward_id:      wardId || null,
+    area_id:      area || null,
+  };
+
+  const method = editingManualId ? 'PUT' : 'POST';
+  const url    = editingManualId ? `/api/manual-items/${editingManualId}` : '/api/manual-items';
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  const j = await r.json();
+
+  btn.disabled = false;
+  document.getElementById('mnSaveIco').textContent = '📨';
+  document.getElementById('mnSaveLbl').textContent = ' Submit for Approval';
+
+  if (j.ok) {
+    toast(editingManualId ? 'Updated ✓' : '✓ Submitted — awaiting senior approval', 'success');
+    clearManualForm();
+    setManualDateNow(); setManualTimeNow();
+    _draftItemId    = null;
+    editingManualId = null;
+    document.getElementById('manualDrawerTitle').textContent = '✏️ Add News Manually';
+    await refreshManualSidebar();
+    renderManualModalList();
+    loadPendingItems();
+  } else {
+    toast('Error: ' + (j.error || 'Unknown'), 'error');
+  }
+}
+
+// ── MANUAL NEWS SIDEBAR ──
+async function refreshManualSidebar() {
+  try {
+    _mnItems = await fetch('/api/manual-items?status=all').then(r => r.json());
+  } catch(e) {
+    _mnItems = [];
+  }
+  renderManualSidebar();
+  renderManualModalList();
+}
+
+function renderManualSidebar() {
+  const container = document.getElementById('manualFeedList');
+  const badge     = document.getElementById('manualCount');
+  if (!container) return;
+  if (badge) badge.textContent = _mnItems.length;
+
+  if (!_mnItems.length) {
+    container.innerHTML = '<div style="font-size:.58rem;color:var(--dim);padding:.15rem 0">No manual items yet.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  _mnItems.forEach(it => {
+    const wrap = document.createElement('div');
+    wrap.id = 'mnw-' + it.id;
+
+    const dateStr = it.pub_date_iso ? new Date(it.pub_date_iso).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    let tagsArr = [];
+    try { tagsArr = JSON.parse(it.tags || '[]'); } catch {}
+
+    const card = document.createElement('div');
+    card.className = 'mn-card';
+    const statusColor = {approved:'var(--acc)',pending:'var(--amber)',under_review:'#63b3ed',rejected:'var(--red)'}[it.approval_status||'pending'] || 'var(--amber)';
+    const statusLabel = {approved:'✓ Live',pending:'⏳ Pending',under_review:'🛡 Under Review',rejected:'✕ Rejected'}[it.approval_status||'pending'] || '⏳ Pending';
+    card.innerHTML = `
+      <div style="display:flex;gap:.3rem;align-items:flex-start">
+        ${it.image ? `<img src="${esc(it.image)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;margin-top:.05rem"/>` : ''}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:.3rem;margin-bottom:.1rem">
+            <div class="mn-card-title" title="${esc(it.title)}" style="flex:1">${esc(it.title)}</div>
+            <span style="font-family:var(--mono);font-size:.48rem;color:${statusColor};background:rgba(0,0,0,.3);border:1px solid ${statusColor};border-radius:3px;padding:0 .25rem;white-space:nowrap;flex-shrink:0">${statusLabel}</span>
+          </div>
+          <div class="mn-card-meta">
+            ${it.category ? `<span class="mn-cat-badge">${esc(it.category)}</span>` : ''}
+            ${it.submitted_by ? `<span>👤${esc(it.submitted_by)}</span>` : (it.creator ? `<span>${esc(it.creator)}</span>` : '')}
+            ${dateStr     ? `<span>· ${dateStr}</span>` : ''}
+            ${it.location ? `<span>· 📍${esc(it.location)}</span>` : ''}
+            ${it.reporter_phone ? `<span>📱${esc(it.reporter_phone)}</span>` : ''}
+            ${it.reporter_email ? `<span>✉️${esc(it.reporter_email)}</span>` : ''}
+          </div>
+          ${it.approval_notes && it.approval_status==='rejected' ? `<div style="font-size:.5rem;color:var(--red);margin-top:.1rem">Reason: ${esc(it.approval_notes)}</div>` : ''}
+          ${tagsArr.length ? `<div style="font-size:.5rem;color:var(--dim);margin-top:.1rem">${tagsArr.map(t=>'#'+esc(t)).join(' ')}</div>` : ''}
+        </div>
+      </div>
+      <div class="mn-card-acts">
+        <button class="btiny" onclick="mnInlineEdit('${it.id}')" title="Edit this item">✏️ Edit</button>
+        ${['pending','under_review'].includes(it.approval_status||'pending') ? `<button class="btiny" onclick="switchTab('pending')" style="color:var(--amber)" title="Go to pending queue">⏳ Review</button>` : ''}
+        <button class="btiny" onclick="mnViewRss('${it.id}')" title="View in RSS">📡</button>
+        ${it.link ? `<a href="${esc(it.link)}" target="_blank" class="btiny" style="text-decoration:none" title="Open article">🔗</a>` : ''}
+        <button class="btiny del" onclick="mnDelete('${it.id}',this)" title="Delete permanently" style="margin-left:auto">✕ Delete</button>
+      </div>`;
+
+    wrap.appendChild(card);
+    container.appendChild(wrap);
+  });
+}
+
+function mnInlineEdit(id) {
+  const it = _mnItems.find(x => x.id === id);
+  if (!it) return;
+  let tagsArr = [];
+  try { tagsArr = JSON.parse(it.tags || '[]'); } catch {}
+
+  document.getElementById('mnem-id').value      = it.id;
+  document.getElementById('mnem-title').value   = it.title || '';
+  document.getElementById('mnem-desc').value    = it.description || '';
+  document.getElementById('mnem-body').value    = it.body_html || '';
+  document.getElementById('mnem-cat').value     = it.category || '';
+  document.getElementById('mnem-tags').value    = tagsArr.join(', ');
+  document.getElementById('mnem-src').value     = it.source_name || '';
+  document.getElementById('mnem-creator').value = it.creator || '';
+  document.getElementById('mnem-srcurl').value  = it.source_url || '';
+  document.getElementById('mnem-link').value    = it.link || '';
+  document.getElementById('mnem-img').value     = it.image || '';
+  document.getElementById('mnem-date').value    = it.pub_date_iso ? it.pub_date_iso.slice(0,10) : '';
+  document.getElementById('mnem-time').value    = it.pub_date_iso ? it.pub_date_iso.slice(11,16) : '';
+  document.getElementById('mnem-loc').value     = it.location || '';
+  document.getElementById('mnem-reporter-phone').value = it.reporter_phone || '';
+  document.getElementById('mnem-reporter-email').value = it.reporter_email || '';
+  document.getElementById('mnem-submitted-by').value   = it.submitted_by || '';
+
+  const prev = document.getElementById('mnem-imgprev');
+  if (it.image) { prev.src = it.image; prev.style.display = 'block'; }
+  else          { prev.style.display = 'none'; prev.src = ''; }
+
+  document.getElementById('mnEditOverlay').style.display = 'flex';
+}
+
+function mnCancelEdit(id) { mnCloseEditModal(); }
+
+function mnCloseEditModal() {
+  document.getElementById('mnEditOverlay').style.display = 'none';
+}
+
+function mnEmPreview() {
+  const url = document.getElementById('mnem-img').value.trim();
+  const prev = document.getElementById('mnem-imgprev');
+  if (url) { prev.src = url; prev.style.display = 'block'; }
+  else      { prev.style.display = 'none'; prev.src = ''; }
+}
+
+async function mnEmUploadImg() {
+  const file = document.getElementById('mnem-imgfile').files[0];
+  if (!file) return;
+  const id = document.getElementById('mnem-id').value;
+  if (!id) { toast('Save the item first before uploading an image', 'warn'); return; }
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('title', document.getElementById('mnem-title').value.trim());
+  const r = await fetch(`/api/manual-items/${id}/upload-image`, {method:'POST', body:fd});
+  const j = await r.json();
+  if (j.ok) {
+    document.getElementById('mnem-img').value = j.url;
+    mnEmPreview();
+    toast('Image uploaded ✓' + (j.via_drive ? ' → Google Drive' : ' (local)'), 'success');
+  } else {
+    toast('Upload failed: ' + (j.error || '?'), 'error');
+  }
+}
+
+async function mnEmSave() {
+  const id = document.getElementById('mnem-id').value;
+  if (!id) return;
+  const title = document.getElementById('mnem-title').value.trim();
+  if (!title) { toast('Title is required', 'error'); document.getElementById('mnem-title').focus(); return; }
+
+  const submitted_by = document.getElementById('mnem-submitted-by').value.trim();
+  const reporter_phone = document.getElementById('mnem-reporter-phone').value.trim();
+  const reporter_email = document.getElementById('mnem-reporter-email').value.trim();
+  if (!submitted_by) { toast('Reporter Name is required', 'error'); document.getElementById('mnem-submitted-by').focus(); return; }
+  if (!reporter_phone) { toast('Phone number is required', 'error'); document.getElementById('mnem-reporter-phone').focus(); return; }
+  if (!reporter_email) { toast('Email is required', 'error'); document.getElementById('mnem-reporter-email').focus(); return; }
+
+  const btn = document.getElementById('mnemSaveBtn');
+  btn.disabled = true;
+  document.getElementById('mnemSaveIco').textContent = '⏳';
+  document.getElementById('mnemSaveLbl').textContent = ' Saving…';
+
+  const d = document.getElementById('mnem-date').value;
+  const t = document.getElementById('mnem-time').value;
+  const pub_date_iso = d ? (d + (t ? 'T' + t + ':00' : 'T00:00:00')) : '';
+
+  const payload = {
+    title,
+    description: document.getElementById('mnem-desc').value.trim(),
+    body_html:   document.getElementById('mnem-body').value.trim(),
+    category:    document.getElementById('mnem-cat').value.split(/[,;]/)[0].trim(),
+    tags:        document.getElementById('mnem-tags').value.trim(),
+    source_name: document.getElementById('mnem-src').value.trim(),
+    creator:     document.getElementById('mnem-creator').value.trim(),
+    source_url:  document.getElementById('mnem-srcurl').value.trim(),
+    link:        document.getElementById('mnem-link').value.trim(),
+    image:       document.getElementById('mnem-img').value.trim(),
+    location:    document.getElementById('mnem-loc').value.trim(),
+    pub_date_iso,
+    submitted_by,
+    reporter_phone,
+    reporter_email,
+  };
+
+  const r = await fetch(`/api/manual-items/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+
+  btn.disabled = false;
+  document.getElementById('mnemSaveIco').textContent = '💾';
+  document.getElementById('mnemSaveLbl').textContent = ' Save Changes';
+
+  if (j.ok) {
+    toast('Saved ✓', 'success');
+    mnCloseEditModal();
+    await refreshManualSidebar();
+  } else {
+    toast('Error: ' + (j.error || '?'), 'error');
+  }
+}
+
+async function mnSaveEdit(id) { await mnEmSave(); }
+
+async function mnDelete(id, btn) {
+  if (!confirm('Permanently delete this news item?')) return;
+  btn.disabled = true;
+  await fetch(`/api/manual-items/${id}`, {method: 'DELETE'});
+  toast('Deleted', 'info');
+  await refreshManualSidebar();
+}
+
+function mnViewRss(id) {
+  window.open('/feed/manual.xml', '_blank');
+}
+
+async function mnUploadImg(id, fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('image', file);
+  const r = await fetch(`/api/manual-items/${id}/upload-image`, {method:'POST', body:fd});
+  const j = await r.json();
+  if (j.ok) {
+    const input = document.getElementById('mne-img-' + id);
+    if (input) input.value = j.url;
+    const prev = document.getElementById('mne-imgprev-' + id);
+    if (prev) {
+      prev.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = j.url;
+      img.style.cssText = 'max-height:60px;max-width:120px;border-radius:3px;margin-top:.2rem;border:1px solid var(--bdr)';
+      prev.appendChild(img);
+    }
+    toast('Image uploaded ✓' + (j.via_drive ? ' → Google Drive' : ' (local)'), 'success');
+  } else {
+    toast('Upload failed', 'error');
+  }
+}
+
+function renderManualModalList() {
+  const container = document.getElementById('manualItemsList');
+  if (!container) return;
+  if (!_mnItems.length) {
+    container.innerHTML = '<div style="font-size:.6rem;color:var(--dim)">No manual items yet.</div>';
+    return;
+  }
+  container.innerHTML = _mnItems.map(it => `
+    <div style="background:var(--panel);border:1px solid var(--bdr);border-radius:5px;padding:.4rem .5rem;display:flex;gap:.4rem;align-items:flex-start">
+      ${it.image ? `<img src="${esc(it.image)}" style="width:36px;height:36px;object-fit:cover;border-radius:3px;flex-shrink:0"/>` : ''}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.62rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.title)}</div>
+        <div style="font-size:.53rem;color:var(--dim);margin-top:.1rem">
+          ${it.category ? `<span class="mn-cat-badge">${esc(it.category)}</span> ` : ''}
+          ${it.creator ? esc(it.creator)+' · ' : ''}
+          ${it.pub_date_iso ? new Date(it.pub_date_iso).toLocaleString() : ''}
+          ${it.reporter_phone ? `📱${esc(it.reporter_phone)}` : ''}
+          ${it.reporter_email ? `✉️${esc(it.reporter_email)}` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:.2rem;flex-shrink:0">
+        <button class="btiny" onclick="closeManual();mnInlineEdit('${it.id}')">✏️</button>
+        <button class="btiny del" onclick="mnDelete('${it.id}',this)">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function loadManualItems() {
+  await refreshManualSidebar();
+}
+
+async function editManualItem(id) {
+  closeManual();
+  mnInlineEdit(id);
+  document.getElementById('manualFeedList')?.scrollIntoView({behavior:'smooth'});
+}
+
+async function deleteManualItem(id, btn) {
+  await mnDelete(id, btn);
+}
+
+// ── PENDING APPROVAL ──
+async function loadPendingItems() {
+  if (!IS_ADMIN) return;
+  try {
+    const items = await fetch('/api/manual-items?status=pending').then(r => r.json());
+    const badge = document.getElementById('pendingBadge');
+    if (badge) {
+      badge.textContent = items.length;
+      badge.style.display = items.length ? '' : 'none';
+    }
+
+    const list = document.getElementById('pendingList');
+    if (!list) return;
+    if (!items.length) {
+      list.innerHTML = '<div style="font-size:.65rem;color:var(--muted);text-align:center;padding:1.5rem">No pending items.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const it of items) {
+      const approvalsRes = await fetch(`/api/manual-items/${it.id}/approvals`);
+      const approvals = await approvalsRes.json();
+      const approvedCount = approvals.filter(a => a.action === 'approve').length;
+      const rejectedCount = approvals.filter(a => a.action === 'reject').length;
+      const required = it.required_approvals || 2;
+
+      const el = document.createElement('div');
+      el.id = 'pend-' + it.id;
+      el.style.cssText = 'background:var(--s2);border:1px solid rgba(255,182,39,.3);border-radius:10px;padding:.65rem .75rem';
+      let tagsArr = []; try { tagsArr = JSON.parse(it.tags||'[]'); } catch {}
+      el.innerHTML = `
+        <div style="font-size:.75rem;font-weight:600;color:var(--text);margin-bottom:.25rem">${esc(it.title)}</div>
+        <div style="font-family:var(--mono);font-size:.55rem;color:var(--acc);margin-bottom:.2rem">
+          ✅ ${approvedCount}/${required} approvals
+          ${rejectedCount > 0 ? ` · ❌ ${rejectedCount} rejections` : ''}
+        </div>
+        <div style="font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-bottom:.2rem;display:flex;gap:.4rem;flex-wrap:wrap">
+          ${it.category?`<span style="color:var(--acc)">${esc(it.category)}</span>`:''}
+          ${it.creator?`<span>by ${esc(it.creator)}</span>`:''}
+          ${it.pub_date_iso?`<span>· ${new Date(it.pub_date_iso).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>`:''}
+          ${it.location?`<span>· 📍${esc(it.location)}</span>`:''}
+          ${it.reporter_phone?`<span>📱${esc(it.reporter_phone)}</span>`:''}
+          ${it.reporter_email?`<span>✉️${esc(it.reporter_email)}</span>`:''}
+        </div>
+        <div style="font-size:.52rem;color:var(--dim);margin-top:.3rem">
+          Already approved: ${approvals.filter(a => a.action === 'approve').map(a => esc(a.admin_username)).join(', ') || 'None'}
+        </div>
+        ${it.description?`<div style="font-size:.65rem;color:var(--muted);line-height:1.45;margin-bottom:.3rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(it.description)}</div>`:''}
+
+        ${IS_ADMIN ? `
+        <div style="border-top:1px solid var(--bdr);padding-top:.45rem;margin-top:.1rem">
+          <div style="font-family:var(--mono);font-size:.55rem;color:var(--amber);margin-bottom:.35rem;font-weight:700">
+            👤 Submitted by: <span style="color:var(--text)">${esc(it.submitted_by||'Unknown')}</span>
+            ${it.submitted_at?`<span style="color:var(--muted);font-weight:400"> · ${new Date(it.submitted_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>`:''}
+          </div>
+
+          <div style="font-family:var(--mono);font-size:.55rem;color:var(--muted);margin-bottom:.4rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em">
+            ✍ Senior Editor Review
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-bottom:.35rem">
+            <div>
+              <div style="font-family:var(--mono);font-size:.52rem;color:var(--muted);margin-bottom:.12rem">Senior Name <span style="color:var(--red)">*</span></div>
+              <input id="appr-name-${it.id}" placeholder="Approver name…" style="width:100%;background:var(--s1);border:1px solid var(--bdr2);border-radius:6px;padding:.28rem .5rem;color:var(--text);font-size:.65rem;font-family:inherit;outline:none"/>
+            </div>
+            <div>
+              <div style="font-family:var(--mono);font-size:.52rem;color:var(--muted);margin-bottom:.12rem">Designation / Role</div>
+              <input id="appr-role-${it.id}" placeholder="e.g. Editor-in-Chief…" style="width:100%;background:var(--s1);border:1px solid var(--bdr2);border-radius:6px;padding:.28rem .5rem;color:var(--text);font-size:.65rem;font-family:inherit;outline:none"/>
+            </div>
+          </div>
+          <div style="margin-bottom:.4rem">
+            <div style="font-family:var(--mono);font-size:.52rem;color:var(--muted);margin-bottom:.12rem">Approval Notes <span style="font-size:.48rem;opacity:.6">(optional — required for rejection)</span></div>
+            <textarea id="appr-notes-${it.id}" placeholder="Notes, corrections, or rejection reason…" rows="2"
+              style="width:100%;background:var(--s1);border:1px solid var(--bdr2);border-radius:6px;padding:.28rem .5rem;color:var(--text);font-size:.65rem;font-family:inherit;outline:none;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+            <button onclick="approveItem('${it.id}','approve')" style="flex:1;padding:.38rem 0;background:rgba(79,255,176,.15);border:1px solid rgba(79,255,176,.35);color:var(--acc);border-radius:7px;font-family:var(--mono);font-size:.62rem;font-weight:700;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(79,255,176,.25)'" onmouseout="this.style.background='rgba(79,255,176,.15)'">
+              ✓ Approve
+            </button>
+            <button onclick="approveItem('${it.id}','reject')" style="flex:1;padding:.38rem 0;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);color:var(--red);border-radius:7px;font-family:var(--mono);font-size:.62rem;font-weight:700;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(255,69,96,.2)'" onmouseout="this.style.background='rgba(255,69,96,.1)'">
+              ✕ Reject
+            </button>
+            <button onclick="mnInlineEdit('${it.id}')" style="padding:.38rem .6rem;background:transparent;border:1px solid var(--bdr2);color:var(--muted);border-radius:7px;font-family:var(--mono);font-size:.62rem;cursor:pointer">
+              ✏️
+            </button>
+            <button onclick="mnDelete('${it.id}',this)" style="padding:.38rem .6rem;background:transparent;border:1px solid rgba(255,69,96,.2);color:var(--red);border-radius:7px;font-family:var(--mono);font-size:.62rem;cursor:pointer">
+              🗑
+            </button>
+          </div>
+        </div>
+        ` : `
+        <div style="border-top:1px solid var(--bdr);padding-top:.45rem;margin-top:.1rem">
+          <div style="font-family:var(--mono);font-size:.55rem;color:var(--amber);font-weight:700">
+            ⏳ Awaiting senior editor approval
+          </div>
+        </div>
+        `}`;
+      list.appendChild(el);
+    }
+  } catch(e) {
+    console.error('loadPendingItems error', e);
+  }
+}
+
+async function approveItem(id, action) {
+  const approvedBy = (document.getElementById('appr-name-'+id)?.value||'').trim();
+  const role       = (document.getElementById('appr-role-'+id)?.value||'').trim();
+  const notes      = (document.getElementById('appr-notes-'+id)?.value||'').trim();
+
+  if (!approvedBy) { toast('Senior name is required to approve/reject', 'error'); document.getElementById('appr-name-'+id)?.focus(); return; }
+  if (action === 'reject' && !notes) { toast('Please add a rejection reason in Notes', 'error'); document.getElementById('appr-notes-'+id)?.focus(); return; }
+
+  const displayName = role ? `${approvedBy} (${role})` : approvedBy;
+  const r = await fetch(`/api/manual-items/${id}/approve`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action, approved_by: displayName, approval_notes: notes })
+  });
+  const j = await r.json();
+  if (j.ok) {
+    const verb = action === 'approve' ? 'Approved ✓ — live in RSS' : 'Rejected';
+    const type = action === 'approve' ? 'success' : 'info';
+    toast(verb, type);
+    document.getElementById('pend-'+id)?.remove();
+    await refreshManualSidebar();
+    loadPendingItems();
+  } else {
+    toast('Error: '+(j.error||'?'), 'error');
+  }
+}
+
+// ── SCRAPED ITEM EDIT / DELETE ──
+let _scrapedEditId = null;
+
+function openScrapedEdit(item) {
+  _scrapedEditId = item.id;
+  document.getElementById('scr-title').value       = item.title || '';
+  document.getElementById('scr-description').value = item.description || '';
+  document.getElementById('scr-author').value      = item.author || '';
+  document.getElementById('scr-image').value       = item.image || '';
+  let cats = []; try { cats = JSON.parse(item.categories||'[]'); } catch {}
+  document.getElementById('scr-categories').value = cats.join(', ');
+  document.getElementById('scr-pub-date').value    = item.pub_date_iso ? item.pub_date_iso.slice(0,10) : '';
+  document.getElementById('scrEditOverlay').style.display = 'flex';
+}
+
+function closeScrEdit() {
+  document.getElementById('scrEditOverlay').style.display = 'none';
+  _scrapedEditId = null;
+}
+
+async function saveScrEdit() {
+  if (!_scrapedEditId) return;
+  const title = document.getElementById('scr-title').value.trim();
+  if (!title) { toast('Title required', 'error'); return; }
+  const payload = {
+    title,
+    description: document.getElementById('scr-description').value.trim(),
+    author:      document.getElementById('scr-author').value.trim(),
+    image:       document.getElementById('scr-image').value.trim(),
+    categories:  document.getElementById('scr-categories').value.trim(),
+    pub_date_iso: document.getElementById('scr-pub-date').value || '',
+  };
+  const r = await fetch(`/api/items/${_scrapedEditId}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+  if (j.ok) {
+    toast('Updated ✓', 'success');
+    closeScrEdit();
+    if (activeFeedId) { loadArticles(activeFeedId, activeFeedName); loadRssPanel(activeFeedId); }
+  } else { toast('Error: '+(j.error||'?'), 'error'); }
+}
+
+async function deleteScrapedItem(itemId, feedId) {
+  if (!confirm('Delete this article permanently from the feed?')) return;
+  const r = await fetch(`/api/items/${itemId}`, {method:'DELETE'});
+  const j = await r.json();
+  if (j.ok) {
+    toast('Deleted', 'info');
+    document.getElementById('ac-'+itemId)?.remove();
+    document.getElementById('ri-'+itemId)?.remove();
+    const badge = document.getElementById('artBadge');
+    if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent||1)-1);
+    const cnt = document.getElementById('fcnt-'+feedId);
+    if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent||1)-1);
+    const rlsCount = document.getElementById('rlsCount');
+    if (rlsCount) rlsCount.textContent = Math.max(0, parseInt(rlsCount.textContent||1)-1);
+    const rssLiveCount = document.getElementById('rssLiveCount');
+    if (rssLiveCount) rssLiveCount.textContent = Math.max(0, parseInt(rssLiveCount.textContent||1)-1)+' items';
+  } else { toast('Error: '+(j.error||'?'), 'error'); }
+}
+
+window.addEventListener('load', () => {
+  refreshManualSidebar();
+  loadPendingItems();
+});
+
+// ── USER LOCATION ASSIGNMENT ──────────────────────────────────────────────────
+
+let _ulUserId = null;
+
+async function ulLoadLocationData() {
+  const countries = await fetch('/api/locations/countries').then(r => r.json());
+  populateSelect('ul-country', countries, 'Country');
+}
+
+function populateSelect(id, items, placeholder) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  items.forEach(it => {
+    const opt = document.createElement('option');
+    opt.value = it.id;
+    opt.textContent = it.name || it.nepali_name || it.title || '';
+    sel.appendChild(opt);
+  });
+}
+
+async function ulOnCountryChange() {
+  const countryId = document.getElementById('ul-country').value;
+  if (!countryId) { populateSelect('ul-province', [], 'Province'); return; }
+  const provinces = await fetch(`/api/locations/provinces?country_id=${countryId}`).then(r => r.json());
+  populateSelect('ul-province', provinces, 'Province');
+  ulOnProvinceChange();
+}
+
+async function ulOnProvinceChange() {
+  const provinceId = document.getElementById('ul-province').value;
+  if (!provinceId) { populateSelect('ul-district', [], 'District'); return; }
+  const districts = await fetch(`/api/locations/districts?province_id=${provinceId}`).then(r => r.json());
+  populateSelect('ul-district', districts, 'District');
+  ulOnDistrictChange();
+}
+
+async function ulOnDistrictChange() {
+  const districtId = document.getElementById('ul-district').value;
+  if (!districtId) { populateSelect('ul-local-level', [], 'Local Level'); return; }
+  const lls = await fetch(`/api/locations/local-levels?district_id=${districtId}`).then(r => r.json());
+  populateSelect('ul-local-level', lls, 'Local Level');
+  ulOnLocalLevelChange();
+}
+
+async function ulOnLocalLevelChange() {
+  const llId = document.getElementById('ul-local-level').value;
+  if (!llId) { populateSelect('ul-ward', [], 'Ward'); return; }
+  const wards = await fetch(`/api/locations/wards?local_level_id=${llId}`).then(r => r.json());
+  populateSelect('ul-ward', wards, 'Ward');
+}
+
+function openUserLocationModal(userId, username) {
+  _ulUserId = userId;
+  document.getElementById('ul-username').textContent = username;
+  document.getElementById('userLocationModal').style.display = 'flex';
+  ulLoadLocationData();
+}
+
+function closeUserLocationModal() {
+  document.getElementById('userLocationModal').style.display = 'none';
+}
+
+async function saveUserLocation() {
+  const payload = {
+    user_id: _ulUserId,
+    country_id: document.getElementById('ul-country').value || null,
+    province_id: document.getElementById('ul-province').value || null,
+    district_id: document.getElementById('ul-district').value || null,
+    local_level_id: document.getElementById('ul-local-level').value || null,
+    ward_id: document.getElementById('ul-ward').value || null,
+    area_id: document.getElementById('ul-area').value || null,
+  };
+  const res = await fetch('/api/admin-locations', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (res.ok) {
+    toast('Location assigned!', 'success');
+    closeUserLocationModal();
+    loadUsers();
+  } else {
+    const err = await res.json();
+    toast('Failed: ' + (err.error || 'unknown'), 'error');
+  }
+}
+
+async function removeUserLocation(userId) {
+  if (!confirm('Remove location assignment for this user?')) return;
+  const locs = await fetch(`/api/admin-locations?user_id=${userId}`).then(r => r.json());
+  if (locs.length) {
+    await fetch(`/api/admin-locations/${locs[0].id}`, { method: 'DELETE' });
+    toast('Location removed', 'info');
+    loadUsers();
+  } else {
+    toast('No location to remove', 'info');
+  }
+}
+
+</script>
+
+<!-- MANUAL EDIT MODAL (centered popup) -->
+<div id="mnEditOverlay" class="mn-edit-modal-overlay" style="display:none" onclick="if(event.target===this)mnCloseEditModal()">
+  <div class="mn-edit-modal">
+    <div class="mn-edit-modal-head">
+      <span class="mn-edit-modal-title">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)"></div>
+        ✏️ Edit Manual News
+      </span>
+      <button class="dclose" onclick="mnCloseEditModal()">✕</button>
+    </div>
+
+    <input type="hidden" id="mnem-id"/>
+
+    <div class="mn-edit-field">
+      <label>Title <span style="color:var(--red)">*</span></label>
+      <input id="mnem-title" placeholder="Headline…"/>
+    </div>
+
+    <div class="mn-edit-field">
+      <label>Short Description / Summary</label>
+      <textarea id="mnem-desc" rows="2" placeholder="Brief summary…"></textarea>
+    </div>
+
+    <div class="mn-edit-field">
+      <label>Body / Full Content (HTML allowed)</label>
+      <textarea id="mnem-body" rows="4" placeholder="Full article body…"></textarea>
+    </div>
+
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Category <span style="font-size:.5rem;opacity:.6">(one only)</span></label>
+        <input id="mnem-cat" placeholder="Politics…"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Tags <span style="font-size:.5rem;opacity:.6">(comma-separated)</span></label>
+        <input id="mnem-tags" placeholder="nepal, election"/>
+      </div>
+    </div>
+
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Source / Publisher</label>
+        <input id="mnem-src" placeholder="Kantipur…"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Creator / Author</label>
+        <input id="mnem-creator" placeholder="Reporter…"/>
+      </div>
+    </div>
+
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Source URL</label>
+        <input id="mnem-srcurl" type="url" placeholder="https://…"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Article Link</label>
+        <input id="mnem-link" type="url" placeholder="https://…"/>
+      </div>
+    </div>
+
+    <div class="mn-edit-field">
+      <label>Featured Image URL</label>
+      <div style="display:flex;gap:.4rem;align-items:center">
+        <input id="mnem-img" type="url" placeholder="https://… or upload" style="flex:1" oninput="mnEmPreview()"/>
+        <label class="rbtn" style="cursor:pointer;font-size:.6rem;padding:.25rem .5rem;white-space:nowrap">
+          📁 Upload<input type="file" id="mnem-imgfile" accept="image/*" style="display:none" onchange="mnEmUploadImg()"/>
+        </label>
+      </div>
+      <img id="mnem-imgprev" src="" alt="" style="display:none;max-height:90px;max-width:200px;border-radius:5px;margin-top:.3rem;border:1px solid var(--bdr)"/>
+    </div>
+
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Publish Date</label>
+        <input type="date" id="mnem-date"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Publish Time (HH:MM)</label>
+        <input type="time" id="mnem-time"/>
+      </div>
+    </div>
+
+    <div class="mn-edit-field">
+      <label>Location / Dateline</label>
+      <input id="mnem-loc" placeholder="Kathmandu, Nepal"/>
+    </div>
+
+    <!-- Reporter fields in edit modal -->
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Reporter Name</label>
+        <input id="mnem-submitted-by" placeholder="Name…"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Reporter Phone</label>
+        <input id="mnem-reporter-phone" placeholder="+977…"/>
+      </div>
+    </div>
+    <div class="mn-edit-field">
+      <label>Reporter Email</label>
+      <input id="mnem-reporter-email" type="email" placeholder="reporter@example.com"/>
+    </div>
+
+    <div class="mn-edit-actions">
+      <button class="dcancel" onclick="mnCloseEditModal()">Cancel</button>
+      <button class="dgo" id="mnemSaveBtn" onclick="mnEmSave()">
+        <span id="mnemSaveIco">💾</span>
+        <span id="mnemSaveLbl"> Save Changes</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SCRAPED ITEM EDIT MODAL -->
+<div id="scrEditOverlay" class="mn-edit-modal-overlay" style="display:none" onclick="if(event.target===this)closeScrEdit()">
+  <div class="mn-edit-modal" style="max-width:580px">
+    <div class="mn-edit-modal-head">
+      <span class="mn-edit-modal-title">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 10px var(--blue)"></div>
+        ✏️ Edit Scraped Article
+      </span>
+      <button class="dclose" onclick="closeScrEdit()">✕</button>
+    </div>
+
+    <div class="mn-edit-field">
+      <label>Title <span style="color:var(--red)">*</span></label>
+      <input id="scr-title" placeholder="Headline…"/>
+    </div>
+    <div class="mn-edit-field">
+      <label>Short Description</label>
+      <textarea id="scr-description" rows="2" placeholder="Summary…"></textarea>
+    </div>
+    <div class="mn-edit-row2">
+      <div class="mn-edit-field">
+        <label>Author</label>
+        <input id="scr-author" placeholder="Reporter name…"/>
+      </div>
+      <div class="mn-edit-field">
+        <label>Publish Date</label>
+        <input type="date" id="scr-pub-date"/>
+      </div>
+    </div>
+    <div class="mn-edit-field">
+      <label>Featured Image URL</label>
+      <input id="scr-image" type="url" placeholder="https://…"/>
+    </div>
+    <div class="mn-edit-field">
+      <label>Categories <span style="font-size:.5rem;opacity:.6">(comma-separated)</span></label>
+      <input id="scr-categories" placeholder="Politics, Nepal…"/>
+    </div>
+
+    <div class="mn-edit-actions">
+      <button class="dcancel" onclick="closeScrEdit()">Cancel</button>
+      <button class="dgo" onclick="saveScrEdit()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK URL MODAL (only for admins) -->
+<div class="drawer" id="drawer" onclick="if(event.target===this)closeDrawer()">
+  <div class="dbox">
+    <div class="dhead">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)"></div>
+        <span class="dtitle" style="font-family:var(--mono);font-size:.9rem;color:var(--acc)">⊞ Bulk URL Import</span>
+      </div>
+      <button class="dclose" onclick="closeDrawer()">✕</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-bottom:.65rem">One URL per line — all will be scraped and turned into live RSS feeds</div>
+    <textarea class="dtextarea" id="bulkUrls"
+      placeholder="https://nagariknews.com&#10;https://kathmandupost.com&#10;https://ekantipur.com&#10;https://onlinekhabar.com"></textarea>
+    <div class="dopts">
+      <div class="dopt"><label>Articles per feed</label>
+        <select id="maxItems"><option value="9999" selected>All (unlimited)</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="30">30</option><option value="20">20</option><option value="10">10</option></select>
+      </div>
+      <div class="dopt"><label>Feed name (optional)</label>
+        <input type="text" id="customName" placeholder="Auto-detected"/>
+      </div>
+    </div>
+    <div class="dactions">
+      <button class="dcancel" onclick="closeDrawer()">Cancel</button>
+      <button class="dgo" id="bulkBtn" onclick="runBulk()"><span id="bulkIco">⚡</span><span id="bulkLbl"> Generate Feeds</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- USER LOCATION ASSIGNMENT MODAL -->
+<div class="drawer" id="userLocationModal" onclick="if(event.target===this)closeUserLocationModal()">
+  <div class="dbox" style="max-width:500px">
+    <div class="dhead">
+      <span class="dtitle">Assign Location for <span id="ul-username"></span></span>
+      <button class="dclose" onclick="closeUserLocationModal()">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin:.6rem 0">
+      <select id="ul-country" onchange="ulOnCountryChange()"><option value="">Country</option></select>
+      <select id="ul-province" onchange="ulOnProvinceChange()"><option value="">Province</option></select>
+      <select id="ul-district" onchange="ulOnDistrictChange()"><option value="">District</option></select>
+      <select id="ul-local-level" onchange="ulOnLocalLevelChange()"><option value="">Local Level</option></select>
+      <select id="ul-ward"><option value="">Ward</option></select>
+      <input id="ul-area" placeholder="Area (optional)">
+    </div>
+    <div class="dactions">
+      <button class="dcancel" onclick="closeUserLocationModal()">Cancel</button>
+      <button class="dgo" onclick="saveUserLocation()">💾 Assign</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── INIT ──
+{% if feeds %}selectFeed('{{ feeds[0].id }}','{{ (feeds[0].custom_name or feeds[0].name)|e }}');{% endif %}
+log('RSS/gen v11 ready — paste a URL above and press Enter.','success');
+loadDriveStatus();
+loadSmtpStatus();
+loadUsers();
+</script>
+</body>
+</html>

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel — RSS/gen</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0f1117;--surface:#1a1d27;--border:#2d3148;--acc:#4ade80;--muted:#64748b;--text:#e2e8f0;--sub:#94a3b8;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sans-serif;min-height:100vh}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:56px}
+  .logo{display:flex;align-items:center;gap:8px;text-decoration:none}
+  .logo-dot{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .logo-text{font-size:.95rem;font-weight:700;color:var(--acc);letter-spacing:.05em}
+  .nav-links{display:flex;align-items:center;gap:1.25rem}
+  .nav-links a{color:var(--sub);text-decoration:none;font-size:.875rem;transition:color .15s}
+  .nav-links a:hover,.nav-links a.active{color:var(--text)}
+
+  .container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+  h1{font-size:1.5rem;font-weight:700;margin-bottom:.3rem}
+  .page-sub{color:var(--muted);font-size:.875rem;margin-bottom:1.75rem}
+
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.75rem;overflow-x:auto}
+  .tab-btn{background:none;border:none;color:var(--muted);padding:.7rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;margin-bottom:-1px;white-space:nowrap}
+  .tab-btn.active{color:var(--acc);border-bottom-color:var(--acc)}
+  .tab-btn:hover:not(.active){color:var(--text)}
+  .tab-pane{display:none}
+  .tab-pane.active{display:block}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.25rem}
+  .card-title{font-size:.95rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:.4rem}
+
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .badge-pending{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
+  .badge-approved{background:rgba(74,222,128,.15);color:var(--acc);border:1px solid rgba(74,222,128,.3)}
+  .badge-rejected{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+  .badge-under_review{background:rgba(96,165,250,.15);color:var(--blue);border:1px solid rgba(96,165,250,.3)}
+  .badge-reporter{background:rgba(99,179,237,.1);color:#7dd3fc}
+  .badge-location_admin{background:rgba(74,222,128,.1);color:var(--acc)}
+  .badge-admin{background:rgba(167,139,250,.1);color:#c4b5fd}
+
+  .btn{display:inline-flex;align-items:center;gap:.35rem;padding:.6rem 1.2rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;border:none;transition:background .2s,opacity .2s}
+  .btn-primary{background:var(--acc);color:#0f1117}
+  .btn-primary:hover{background:#22c55e}
+  .btn-danger{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+  .btn-danger:hover{background:rgba(248,113,113,.25)}
+  .btn-ghost{background:#2d3148;color:var(--text)}
+  .btn-ghost:hover{background:#374151}
+  .btn-sm{padding:.35rem .75rem;font-size:.78rem}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+
+  .alert{border-radius:8px;padding:.7rem 1rem;font-size:.85rem;margin-bottom:.9rem;display:none}
+  .alert-success{background:#14532d;border:1px solid #166534;color:#86efac}
+  .alert-error{background:#3b1a1a;border:1px solid #7f1d1d;color:var(--red)}
+  .alert.show{display:block}
+
+  .form-group{margin-bottom:1rem}
+  .form-group label{display:block;font-size:.72rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem}
+  .form-group input,.form-group select,.form-group textarea{width:100%;background:#0f1117;border:1px solid var(--border);border-radius:8px;padding:.65rem .9rem;color:var(--text);font-size:.9rem;outline:none;transition:border .2s}
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--acc)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  @media(max-width:600px){.form-grid{grid-template-columns:1fr}}
+
+  /* News item cards */
+  .news-card{background:#0f1117;border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:.75rem;transition:border-color .2s}
+  .news-card:hover{border-color:#3d4268}
+  .news-meta{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem}
+  .news-title{font-size:.95rem;font-weight:700;margin-bottom:.3rem}
+  .news-desc{font-size:.8rem;color:var(--sub);margin-bottom:.5rem;line-height:1.45}
+  .news-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+  .approval-bar{height:4px;border-radius:2px;background:var(--border);margin:.5rem 0;overflow:hidden}
+  .approval-fill{height:100%;background:var(--acc);transition:width .3s}
+
+  /* User rows */
+  .user-row{background:#0f1117;border:1px solid var(--border);border-radius:8px;padding:.6rem .85rem;display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
+  .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0}
+
+  /* Location selects */
+  .loc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+  @media(max-width:540px){.loc-grid{grid-template-columns:1fr}}
+  .loc-grid select,.loc-grid input{background:#0f1117;border:1px solid var(--border);border-radius:8px;padding:.55rem .75rem;color:var(--text);font-size:.85rem;outline:none;width:100%}
+  .loc-grid select:focus,.loc-grid input:focus{border-color:var(--acc)}
+
+  /* Stats */
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1.25rem}
+  .stat-card{background:#0f1117;border:1px solid var(--border);border-radius:10px;padding:.9rem 1rem}
+  .stat-num{font-size:1.7rem;font-weight:800;color:var(--acc)}
+  .stat-lbl{font-size:.72rem;color:var(--muted);margin-top:.15rem}
+
+  /* Filter bar */
+  .filter-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+  .filter-bar select{background:#0f1117;border:1px solid var(--border);border-radius:7px;padding:.4rem .6rem;color:var(--text);font-size:.8rem;outline:none}
+  .filter-bar input{background:#0f1117;border:1px solid var(--border);border-radius:7px;padding:.4rem .7rem;color:var(--text);font-size:.8rem;outline:none;flex:1;min-width:150px}
+  .filter-bar input:focus,.filter-bar select:focus{border-color:var(--acc)}
+
+  /* Empty state */
+  .empty{text-align:center;padding:2.5rem;color:var(--muted);font-size:.85rem}
+  .empty .icon{font-size:2rem;margin-bottom:.5rem}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;z-index:900;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);backdrop-filter:blur(14px)}
+  .modal.open{display:flex}
+  .modal-box{background:var(--surface);border:1px solid var(--acc);border-radius:16px;width:95%;max-width:520px;padding:1.6rem;box-shadow:0 0 60px rgba(79,255,176,.12),0 24px 64px rgba(0,0,0,.6)}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
+  .modal-title{font-size:.95rem;font-weight:700;color:var(--acc)}
+  .modal-close{background:#2d3148;border:1px solid var(--border);color:var(--muted);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <a class="logo" href="/"><div class="logo-dot"></div><span class="logo-text">RSS/gen</span></a>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/account">Account</a>
+    <a href="/logout">Sign Out</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1>⚙️ Admin Panel</h1>
+  <p class="page-sub">Manage news approvals, users, and location assignments</p>
+
+  <!-- Stats row -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="stat-num" id="stat-pending">—</div><div class="stat-lbl">Pending Approval</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-approved">—</div><div class="stat-lbl">Approved Today</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-users">—</div><div class="stat-lbl">Total Users</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-locs">—</div><div class="stat-lbl">Locations Assigned</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="approvals">📋 News Approvals</button>
+    <button class="tab-btn" data-tab="locations">📍 Location Setup</button>
+    <button class="tab-btn" data-tab="users" id="usersTabBtn" style="display:none">👥 Users</button>
+  </div>
+
+  <!-- ══════ APPROVALS TAB ══════ -->
+  <div class="tab-pane active" id="tab-approvals">
+    <div class="card">
+      <div class="card-title">📋 Pending News Items</div>
+      <div class="filter-bar">
+        <select id="approvalStatusFilter" onchange="loadApprovals()">
+          <option value="pending">Pending</option>
+          <option value="under_review">Under Review</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="all">All</option>
+        </select>
+        <input id="approvalSearch" placeholder="Search by title or reporter…" oninput="filterApprovals()">
+        <button class="btn btn-ghost btn-sm" onclick="loadApprovals()">↻ Refresh</button>
+      </div>
+      <div id="approvalsList">
+        <div class="empty"><div class="icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ LOCATION SETUP TAB ══════ -->
+  <div class="tab-pane" id="tab-locations">
+    <div class="card">
+      <div class="card-title">📍 Location Assignments</div>
+      <p style="font-size:.82rem;color:var(--sub);margin-bottom:1rem">Assign geographic scopes to Location Admin users. They can only approve news items that match their assigned location.</p>
+      <div id="locationAssignAlert" class="alert"></div>
+
+      <!-- Assign Location Form -->
+      <div style="background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.15);border-radius:10px;padding:1rem;margin-bottom:1.25rem">
+        <div style="font-size:.75rem;font-weight:700;color:var(--acc);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.08em">➕ Assign Location to User</div>
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <div class="form-group" style="margin:0">
+            <label>User</label>
+            <select id="assign-user"><option value="">Select user…</option></select>
+          </div>
+          <div></div>
+        </div>
+        <div class="loc-grid" style="margin-bottom:.75rem">
+          <select id="assign-country" onchange="assignLoadProvinces()"><option value="">Country</option></select>
+          <select id="assign-province" onchange="assignLoadDistricts()"><option value="">Province</option></select>
+          <select id="assign-district" onchange="assignLoadLocalLevels()"><option value="">District</option></select>
+          <select id="assign-local-level" onchange="assignLoadWards()"><option value="">Local Level</option></select>
+          <select id="assign-ward"><option value="">Ward</option></select>
+          <input id="assign-area" placeholder="Area (optional)">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="submitAssignLocation()">💾 Assign Location</button>
+      </div>
+
+      <!-- Current Assignments List -->
+      <div style="font-size:.78rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem">Current Assignments</div>
+      <div id="locationsList">
+        <div class="empty"><div class="icon">📍</div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- Reporter Location Profile -->
+    <div class="card" id="reporterLocProfile">
+      <div class="card-title">🗺️ My Assigned Location</div>
+      <div id="myLocDisplay" style="font-size:.9rem;color:var(--sub)">Loading your location…</div>
+    </div>
+  </div>
+
+  <!-- ══════ USERS TAB ══════ -->
+  <div class="tab-pane" id="tab-users">
+    <div class="card">
+      <div class="card-title">👥 User Management</div>
+      <div id="usersAlert" class="alert"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <input id="userSearch" placeholder="Search users…" oninput="filterUsers()" style="background:#0f1117;border:1px solid var(--border);border-radius:7px;padding:.4rem .7rem;color:var(--text);font-size:.8rem;outline:none;max-width:240px">
+        <div style="display:flex;gap:.4rem">
+          <button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Create User</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadUsers()">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="usersList"><div class="empty"><div class="icon">⏳</div>Loading…</div></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ── News Detail Modal ── -->
+<div class="modal" id="newsModal">
+  <div class="modal-box" style="max-width:680px">
+    <div class="modal-header">
+      <span class="modal-title" id="newsModalTitle">News Detail</span>
+      <button class="modal-close" onclick="closeNewsModal()">✕</button>
+    </div>
+    <div id="newsModalBody" style="max-height:60vh;overflow-y:auto;font-size:.85rem;color:var(--sub);line-height:1.6"></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)" id="newsModalActions"></div>
+  </div>
+</div>
+
+<!-- ── Create User Modal ── -->
+<div class="modal" id="createUserModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">➕ Create New User</span>
+      <button class="modal-close" onclick="closeCreateUserModal()">✕</button>
+    </div>
+    <div id="cuAlert" class="alert"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Username *</label><input id="cu-username" placeholder="reporter_name"></div>
+      <div class="form-group"><label>Gmail *</label><input id="cu-email" type="email" placeholder="user@gmail.com"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Phone (optional)</label><input id="cu-phone" placeholder="+977 9812345678"></div>
+      <div class="form-group"><label>Role</label>
+        <select id="cu-role">
+          <option value="reporter">Reporter</option>
+          <option value="location_admin">Location Admin</option>
+          <option value="admin">Admin (global)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Password * (min 12 chars, uppercase, number, special)</label><input id="cu-password" type="password" placeholder="StrongPass@2024!"></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+      <button class="btn btn-ghost" onclick="closeCreateUserModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateUser()">✚ Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── User Location Assign Modal (from users tab) ── -->
+<div class="modal" id="ulModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">📍 Assign Location — <span id="ulModalName"></span></span>
+      <button class="modal-close" onclick="closeUlModal()">✕</button>
+    </div>
+    <div class="loc-grid" style="margin:.6rem 0">
+      <select id="ulm-country" onchange="ulmLoadProvinces()"><option value="">Country</option></select>
+      <select id="ulm-province" onchange="ulmLoadDistricts()"><option value="">Province</option></select>
+      <select id="ulm-district" onchange="ulmLoadLocalLevels()"><option value="">District</option></select>
+      <select id="ulm-local-level" onchange="ulmLoadWards()"><option value="">Local Level</option></select>
+      <select id="ulm-ward"><option value="">Ward</option></select>
+      <input id="ulm-area" placeholder="Area (optional)" style="background:#0f1117;border:1px solid var(--border);border-radius:8px;padding:.55rem .75rem;color:var(--text);font-size:.85rem;outline:none">
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeUlModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUlModal()">💾 Assign</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let currentUser = null;
+let allApprovals = [];
+let allUsers = [];
+let _ulUserId = null;
+let _newsModalId = null;
+
+// ── Init ──
+async function init() {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login'; return; }
+  currentUser = await r.json();
+
+  if (currentUser.role === 'admin') {
+    document.getElementById('usersTabBtn').style.display = '';
+  }
+
+  await loadStats();
+  await loadApprovals();
+  await loadLocationTab();
+
+  if (currentUser.role === 'admin') {
+    await loadUsers();
+    await loadAssignUsers();
+    await loadAssignCountries();
+  }
+}
+
+// ── Tabs ──
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Stats ──
+async function loadStats() {
+  try {
+    const [pend, appr, users, locs] = await Promise.all([
+      fetch('/api/manual-items?status=pending').then(r=>r.json()).catch(()=>[]),
+      fetch('/api/manual-items?status=approved').then(r=>r.json()).catch(()=>[]),
+      fetch('/api/auth/users').then(r=>r.ok?r.json():[]).catch(()=>[]),
+      fetch('/api/admin-locations').then(r=>r.json()).catch(()=>[]),
+    ]);
+    document.getElementById('stat-pending').textContent = Array.isArray(pend)?pend.length:'—';
+    document.getElementById('stat-approved').textContent = Array.isArray(appr)?appr.filter(i=>{
+      const d=new Date(i.approved_at||i.created_at); return d>new Date(Date.now()-86400000);
+    }).length:'—';
+    document.getElementById('stat-users').textContent = Array.isArray(users)?users.length:'—';
+    document.getElementById('stat-locs').textContent = Array.isArray(locs)?locs.length:'—';
+  } catch(e) {}
+}
+
+// ── Approvals ──
+async function loadApprovals() {
+  const status = document.getElementById('approvalStatusFilter').value;
+  const list = document.getElementById('approvalsList');
+  list.innerHTML = '<div class="empty"><div class="icon">⏳</div>Loading…</div>';
+  try {
+    const url = status === 'all' ? '/api/manual-items?status=all' : `/api/manual-items?status=${status}`;
+    const r = await fetch(url);
+    allApprovals = r.ok ? await r.json() : [];
+    renderApprovals(allApprovals);
+  } catch(e) {
+    list.innerHTML = `<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function filterApprovals() {
+  const q = document.getElementById('approvalSearch').value.toLowerCase();
+  if (!q) { renderApprovals(allApprovals); return; }
+  renderApprovals(allApprovals.filter(i =>
+    (i.title||'').toLowerCase().includes(q) ||
+    (i.submitted_by||'').toLowerCase().includes(q) ||
+    (i.reporter_email||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderApprovals(items) {
+  const list = document.getElementById('approvalsList');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty"><div class="icon">📭</div>No items found</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const it of items) {
+    const statusClass = 'badge-' + (it.approval_status||'pending');
+    const statusLabel = (it.approval_status||'pending').replace('_',' ');
+    const pct = it.required_approvals > 0 ? Math.min(100, Math.round((it.approval_count||0)/it.required_approvals*100)) : 0;
+    const canAct = it.approval_status === 'pending' || it.approval_status === 'under_review';
+    const d = document.createElement('div');
+    d.className = 'news-card';
+    d.innerHTML = `
+      <div class="news-meta">
+        <span class="badge ${statusClass}">${statusLabel}</span>
+        ${it.category ? `<span class="badge" style="background:rgba(96,165,250,.1);color:var(--blue)">${esc(it.category)}</span>` : ''}
+        ${it.location ? `<span style="font-size:.7rem;color:var(--muted)">📍 ${esc(it.location)}</span>` : ''}
+        <span style="font-size:.7rem;color:var(--muted);margin-left:auto">${fmtDate(it.created_at)}</span>
+      </div>
+      <div class="news-title">${esc(it.title)}</div>
+      <div class="news-desc">${esc((it.description||'').slice(0,180))}${(it.description||'').length>180?'…':''}</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem">
+        👤 ${esc(it.submitted_by||'Unknown')}
+        ${it.reporter_phone?` &nbsp;📱 ${esc(it.reporter_phone)}`:''}
+        ${it.reporter_email?` &nbsp;📧 ${esc(it.reporter_email)}`:''}
+      </div>
+      ${canAct ? `<div class="approval-bar"><div class="approval-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:.5rem">${it.approval_count||0}/${it.required_approvals||2} approvals</div>` : ''}
+      <div class="news-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openNewsModal('${it.id}')">👁 View</button>
+        ${canAct ? `
+          <button class="btn btn-primary btn-sm" onclick="approveItem('${it.id}')">✓ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectItem('${it.id}')">✗ Reject</button>
+        ` : ''}
+      </div>`;
+    list.appendChild(d);
+  }
+}
+
+async function approveItem(id, notes='') {
+  const r = await fetch(`/api/manual-items/${id}/approve`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'approve', approval_notes: notes})
+  });
+  const d = await r.json();
+  if (r.ok) { toast(`✓ ${d.status === 'approved' ? 'Fully approved!' : 'Vote counted — ' + d.approval_count + '/' + d.required_approvals}`, 'success'); loadApprovals(); loadStats(); }
+  else toast('Error: ' + (d.error||'failed'), 'error');
+}
+
+async function rejectItem(id) {
+  const notes = prompt('Rejection reason (optional):') ?? null;
+  if (notes === null) return; // cancelled
+  const r = await fetch(`/api/manual-items/${id}/approve`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'reject', approval_notes: notes})
+  });
+  const d = await r.json();
+  if (r.ok) { toast('Item rejected', 'info'); loadApprovals(); loadStats(); }
+  else toast('Error: ' + (d.error||'failed'), 'error');
+}
+
+async function openNewsModal(id) {
+  _newsModalId = id;
+  const item = allApprovals.find(i=>i.id===id);
+  if (!item) return;
+  document.getElementById('newsModalTitle').textContent = item.title;
+  const canAct = item.approval_status==='pending' || item.approval_status==='under_review';
+
+  // Load approval history
+  const logR = await fetch(`/api/manual-items/${id}/approvals`);
+  const logs = logR.ok ? await logR.json() : [];
+  const logHtml = logs.length ? `<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)">
+    <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem">Approval History</div>
+    ${logs.map(l=>`<div style="font-size:.76rem;margin-bottom:.25rem">
+      <span style="color:${l.action==='approve'?'var(--acc)':'var(--red)'}">${l.action==='approve'?'✓':'✗'} ${esc(l.admin_username)}</span>
+      <span style="color:var(--muted)"> — ${fmtDate(l.created_at)}</span>
+      ${l.comment?`<span style="color:var(--sub)"> "${esc(l.comment)}"</span>`:''}
+    </div>`).join('')}
+  </div>` : '';
+
+  document.getElementById('newsModalBody').innerHTML = `
+    <div style="margin-bottom:.5rem"><span class="badge badge-${item.approval_status||'pending'}">${(item.approval_status||'pending').replace('_',' ')}</span></div>
+    ${item.image ? `<img src="${esc(item.image)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:.75rem">` : ''}
+    <p style="color:var(--text);margin-bottom:.5rem">${esc(item.description||'No description')}</p>
+    ${item.body_html ? `<div style="border-top:1px solid var(--border);padding-top:.5rem;margin-top:.5rem;max-height:200px;overflow-y:auto;font-size:.8rem">${item.body_html}</div>` : ''}
+    <div style="margin-top:.75rem;font-size:.75rem;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:.3rem">
+      <div>👤 Reporter: <strong>${esc(item.submitted_by||'—')}</strong></div>
+      <div>📱 Phone: ${esc(item.reporter_phone||'—')}</div>
+      <div>📧 Email: ${esc(item.reporter_email||'—')}</div>
+      <div>📍 Location: ${esc(item.location||'—')}</div>
+      <div>🏷 Category: ${esc(item.category||'—')}</div>
+      <div>📅 Submitted: ${fmtDate(item.submitted_at||item.created_at)}</div>
+    </div>
+    ${logHtml}`;
+
+  const actDiv = document.getElementById('newsModalActions');
+  actDiv.innerHTML = canAct ? `
+    <button class="btn btn-danger btn-sm" onclick="rejectItem('${id}');closeNewsModal()">✗ Reject</button>
+    <button class="btn btn-primary btn-sm" onclick="approveItem('${id}');closeNewsModal()">✓ Approve</button>
+  ` : '';
+
+  document.getElementById('newsModal').classList.add('open');
+}
+function closeNewsModal() { document.getElementById('newsModal').classList.remove('open'); }
+document.getElementById('newsModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeNewsModal(); });
+
+// ── Location Tab ──
+async function loadLocationTab() {
+  // Show my location for location_admin / reporter
+  const myLocDiv = document.getElementById('myLocDisplay');
+  try {
+    const r = await fetch(`/api/admin-locations?user_id=${currentUser.user_id}`);
+    const locs = r.ok ? await r.json() : [];
+    if (locs.length) {
+      const l = locs[0];
+      const label = await buildLocLabel(l);
+      myLocDiv.innerHTML = `<span style="color:var(--acc);font-weight:700">📍 ${label||'Assigned location'}</span>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem">Scope: ${l.approval_scope_level||'—'} #${l.approval_scope_id||'—'}</div>`;
+    } else {
+      myLocDiv.innerHTML = '<span style="color:var(--muted)">No location assigned yet.</span>';
+    }
+  } catch(e) { myLocDiv.textContent = 'Could not load location.'; }
+
+  if (currentUser.role === 'admin') {
+    await loadLocationsList();
+  } else {
+    // Hide assign form for non-admins
+    document.querySelector('#tab-locations .card:first-child').style.display = 'none';
+  }
+}
+
+async function loadLocationsList() {
+  const list = document.getElementById('locationsList');
+  list.innerHTML = '<div class="empty"><div class="icon">⏳</div>Loading…</div>';
+  try {
+    const [locsR, usersR] = await Promise.all([
+      fetch('/api/admin-locations'),
+      fetch('/api/auth/users')
+    ]);
+    const locs = locsR.ok ? await locsR.json() : [];
+    const users = usersR.ok ? await usersR.json() : [];
+    const userMap = Object.fromEntries(users.map(u=>[u.id,u]));
+    if (!locs.length) {
+      list.innerHTML = '<div class="empty"><div class="icon">📍</div>No locations assigned yet</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const loc of locs) {
+      const u = userMap[loc.user_id] || {};
+      const label = await buildLocLabel(loc);
+      const d = document.createElement('div');
+      d.className = 'user-row';
+      d.innerHTML = `
+        <div class="user-avatar" style="background:rgba(74,222,128,.15)">📍</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.8rem;font-weight:700">${esc(u.username||loc.user_id)} <span class="badge badge-${u.role||'reporter'}">${(u.role||'?').replace('_',' ')}</span></div>
+          <div style="font-size:.72rem;color:var(--muted)">${esc(label||'Location #'+loc.id)}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeLocation(${loc.id})">Remove</button>`;
+      list.appendChild(d);
+    }
+  } catch(e) {
+    list.innerHTML = `<div class="empty" style="color:var(--red)">Error loading locations</div>`;
+  }
+}
+
+async function loadAssignUsers() {
+  const sel = document.getElementById('assign-user');
+  try {
+    const r = await fetch('/api/auth/users');
+    const users = r.ok ? await r.json() : [];
+    sel.innerHTML = '<option value="">Select user…</option>';
+    users.forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.id; o.textContent = `${u.username} (${u.role})`;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+async function loadAssignCountries() {
+  const r = await fetch('/api/locations/countries');
+  const data = r.ok ? await r.json() : [];
+  populateSel('assign-country', data, 'Country');
+}
+
+async function assignLoadProvinces() {
+  const cid = document.getElementById('assign-country').value;
+  if (!cid) { populateSel('assign-province',[],  'Province'); return; }
+  const r = await fetch(`/api/locations/provinces?country_id=${cid}`);
+  populateSel('assign-province', r.ok?await r.json():[], 'Province');
+  populateSel('assign-district',[],  'District');
+  populateSel('assign-local-level',[],'Local Level');
+  populateSel('assign-ward',[],  'Ward');
+}
+async function assignLoadDistricts() {
+  const pid = document.getElementById('assign-province').value;
+  if (!pid) { populateSel('assign-district',[],  'District'); return; }
+  const r = await fetch(`/api/locations/districts?province_id=${pid}`);
+  populateSel('assign-district', r.ok?await r.json():[], 'District');
+  populateSel('assign-local-level',[],'Local Level');
+  populateSel('assign-ward',[],  'Ward');
+}
+async function assignLoadLocalLevels() {
+  const did = document.getElementById('assign-district').value;
+  if (!did) { populateSel('assign-local-level',[],'Local Level'); return; }
+  const r = await fetch(`/api/locations/local-levels?district_id=${did}`);
+  populateSel('assign-local-level', r.ok?await r.json():[], 'Local Level');
+  populateSel('assign-ward',[],  'Ward');
+}
+async function assignLoadWards() {
+  const llid = document.getElementById('assign-local-level').value;
+  if (!llid) { populateSel('assign-ward',[],'Ward'); return; }
+  const r = await fetch(`/api/locations/wards?local_level_id=${llid}`);
+  populateSel('assign-ward', r.ok?await r.json():[], 'Ward', 'id', 'ward_number');
+}
+
+async function submitAssignLocation() {
+  const userId = document.getElementById('assign-user').value;
+  const alertEl = document.getElementById('locationAssignAlert');
+  if (!userId) { showAlert('locationAssignAlert','Please select a user','error'); return; }
+  const payload = {
+    user_id: userId,
+    country_id: document.getElementById('assign-country').value||null,
+    province_id: document.getElementById('assign-province').value||null,
+    district_id: document.getElementById('assign-district').value||null,
+    local_level_id: document.getElementById('assign-local-level').value||null,
+    ward_id: document.getElementById('assign-ward').value||null,
+    area_id: document.getElementById('assign-area').value.trim()||null,
+  };
+  if (!payload.country_id && !payload.province_id && !payload.district_id && !payload.local_level_id && !payload.ward_id && !payload.area_id) {
+    showAlert('locationAssignAlert','Please select at least one location field','error'); return;
+  }
+  // First remove existing location for this user
+  try {
+    const existing = await fetch(`/api/admin-locations?user_id=${userId}`).then(r=>r.json());
+    if (existing.length) {
+      await fetch(`/api/admin-locations/${existing[0].id}`, {method:'DELETE'});
+    }
+  } catch(e) {}
+  const r = await fetch('/api/admin-locations', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (r.ok) {
+    showAlert('locationAssignAlert','Location assigned successfully!','success');
+    loadLocationsList(); loadStats();
+  } else {
+    const d = await r.json();
+    showAlert('locationAssignAlert', d.error||'Failed','error');
+  }
+}
+
+async function removeLocation(locId) {
+  if (!confirm('Remove this location assignment?')) return;
+  const r = await fetch(`/api/admin-locations/${locId}`, {method:'DELETE'});
+  if (r.ok) { toast('Location removed','info'); loadLocationsList(); loadStats(); }
+  else toast('Failed to remove location','error');
+}
+
+// ── Users Tab ──
+async function loadUsers() {
+  const list = document.getElementById('usersList');
+  if (!list) return;
+  list.innerHTML = '<div class="empty"><div class="icon">⏳</div>Loading…</div>';
+  try {
+    const r = await fetch('/api/auth/users');
+    if (!r.ok) { list.innerHTML='<div class="empty" style="color:var(--red)">Unauthorized</div>'; return; }
+    allUsers = await r.json();
+    renderUsers(allUsers);
+  } catch(e) { list.innerHTML=`<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`; }
+}
+
+function filterUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  renderUsers(allUsers.filter(u =>
+    (u.username||'').toLowerCase().includes(q) ||
+    (u.email||'').toLowerCase().includes(q) ||
+    (u.role||'').includes(q)
+  ));
+}
+
+function renderUsers(users) {
+  const list = document.getElementById('usersList');
+  if (!users.length) { list.innerHTML='<div class="empty"><div class="icon">👤</div>No users found</div>'; return; }
+  list.innerHTML = '';
+  for (const u of users) {
+    const isSelf = u.id === currentUser.user_id;
+    const d = document.createElement('div');
+    d.className = 'user-row';
+    d.innerHTML = `
+      <div class="user-avatar" style="background:${['admin','location_admin'].includes(u.role)?'rgba(74,222,128,.2)':'rgba(99,179,237,.1)'}">
+        ${['admin','location_admin'].includes(u.role)?'👑':'📰'}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.8rem;font-weight:700">
+          ${esc(u.username)} <span class="badge badge-${u.role||'reporter'}">${(u.role||'reporter').replace('_',' ')}</span>
+          ${isSelf?'<span style="font-size:.6rem;color:var(--muted);margin-left:.2rem">(you)</span>':''}
+        </div>
+        <div style="font-size:.7rem;color:var(--muted)">📧 ${esc(u.email)} ${u.phone?`📱 ${esc(u.phone)}`:''}</div>
+      </div>
+      <div style="display:flex;gap:.3rem;flex-shrink:0;flex-direction:column;align-items:flex-end">
+        ${!isSelf ? `
+          <button class="btn btn-ghost btn-sm" onclick="openUlModal('${u.id}','${esc(u.username)}')">📍 Assign</button>
+          <select onchange="changeRole('${u.id}',this.value,this)" style="background:#0f1117;border:1px solid var(--border);border-radius:5px;padding:.15rem .3rem;color:var(--text);font-size:.65rem;outline:none;cursor:pointer">
+            <option value="reporter" ${u.role==='reporter'?'selected':''}>Reporter</option>
+            <option value="location_admin" ${u.role==='location_admin'?'selected':''}>Location Admin</option>
+            <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
+          </select>
+          <button onclick="deleteUser('${u.id}','${esc(u.username)}')" style="font-size:.65rem;padding:.15rem .4rem;background:transparent;border:1px solid rgba(248,113,113,.3);color:var(--red);border-radius:5px;cursor:pointer">Remove</button>
+        ` : ''}
+      </div>`;
+    list.appendChild(d);
+  }
+}
+
+async function changeRole(userId, newRole, sel) {
+  const r = await fetch('/api/auth/users/' + userId, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({role: newRole})
+  });
+  const d = await r.json();
+  if (d.ok !== false) { toast('Role updated to ' + newRole,'success'); loadUsers(); }
+  else toast('Error updating role','error');
+}
+
+async function deleteUser(userId, username) {
+  if (!confirm(`Remove user "${username}"? This cannot be undone.`)) return;
+  const r = await fetch('/api/auth/users/' + userId, {method:'DELETE'});
+  if (r.ok) { toast('User removed','info'); loadUsers(); loadStats(); }
+  else toast('Cannot delete this user','error');
+}
+
+// ── Create User Modal ──
+function showCreateUserModal() { document.getElementById('createUserModal').classList.add('open'); }
+function closeCreateUserModal() {
+  document.getElementById('createUserModal').classList.remove('open');
+  ['cu-username','cu-email','cu-phone','cu-password'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('cu-role').value='reporter';
+  clearAlert('cuAlert');
+}
+document.getElementById('createUserModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeCreateUserModal(); });
+
+async function submitCreateUser() {
+  const username=(document.getElementById('cu-username').value||'').trim();
+  const email=(document.getElementById('cu-email').value||'').trim();
+  const phone=(document.getElementById('cu-phone').value||'').trim();
+  const password=(document.getElementById('cu-password').value||'').trim();
+  const role=document.getElementById('cu-role').value;
+  clearAlert('cuAlert');
+  if (!username||!email||!password) { showAlert('cuAlert','Username, email and password are required','error'); return; }
+  const r = await fetch('/api/auth/users', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username,email,phone,password,role})
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Account created for '+username,'success'); closeCreateUserModal(); loadUsers(); loadStats(); }
+  else showAlert('cuAlert', d.error||'Failed to create account','error');
+}
+
+// ── User Location Modal (from users tab) ──
+let _ulmLoaded = false;
+function openUlModal(userId, username) {
+  _ulUserId = userId;
+  document.getElementById('ulModalName').textContent = username;
+  document.getElementById('ulModal').classList.add('open');
+  ulmLoadCountries();
+}
+function closeUlModal() { document.getElementById('ulModal').classList.remove('open'); }
+document.getElementById('ulModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeUlModal(); });
+
+async function ulmLoadCountries() {
+  const r = await fetch('/api/locations/countries');
+  populateSel('ulm-country', r.ok?await r.json():[], 'Country');
+}
+async function ulmLoadProvinces() {
+  const cid = document.getElementById('ulm-country').value;
+  if (!cid) { populateSel('ulm-province',[],'Province'); return; }
+  const r = await fetch(`/api/locations/provinces?country_id=${cid}`);
+  populateSel('ulm-province', r.ok?await r.json():[], 'Province');
+  populateSel('ulm-district',[],'District');
+}
+async function ulmLoadDistricts() {
+  const pid = document.getElementById('ulm-province').value;
+  if (!pid) { populateSel('ulm-district',[],'District'); return; }
+  const r = await fetch(`/api/locations/districts?province_id=${pid}`);
+  populateSel('ulm-district', r.ok?await r.json():[], 'District');
+}
+async function ulmLoadLocalLevels() {
+  const did = document.getElementById('ulm-district').value;
+  if (!did) { populateSel('ulm-local-level',[],'Local Level'); return; }
+  const r = await fetch(`/api/locations/local-levels?district_id=${did}`);
+  populateSel('ulm-local-level', r.ok?await r.json():[], 'Local Level');
+}
+async function ulmLoadWards() {
+  const llid = document.getElementById('ulm-local-level').value;
+  if (!llid) { populateSel('ulm-ward',[],'Ward'); return; }
+  const r = await fetch(`/api/locations/wards?local_level_id=${llid}`);
+  populateSel('ulm-ward', r.ok?await r.json():[], 'Ward', 'id', 'ward_number');
+}
+async function saveUlModal() {
+  const payload = {
+    user_id: _ulUserId,
+    country_id: document.getElementById('ulm-country').value||null,
+    province_id: document.getElementById('ulm-province').value||null,
+    district_id: document.getElementById('ulm-district').value||null,
+    local_level_id: document.getElementById('ulm-local-level').value||null,
+    ward_id: document.getElementById('ulm-ward').value||null,
+    area_id: document.getElementById('ulm-area').value.trim()||null,
+  };
+  // Remove existing first
+  try {
+    const existing = await fetch(`/api/admin-locations?user_id=${_ulUserId}`).then(r=>r.json());
+    if (existing.length) await fetch(`/api/admin-locations/${existing[0].id}`,{method:'DELETE'});
+  } catch(e) {}
+  const r = await fetch('/api/admin-locations', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (r.ok) { toast('Location assigned!','success'); closeUlModal(); loadUsers(); loadStats(); }
+  else { const d=await r.json(); toast('Failed: '+(d.error||'unknown'),'error'); }
+}
+
+// ── Helpers ──
+function populateSel(id, items, placeholder, valKey='id', lblKey='name') {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  items.forEach(it => {
+    const o = document.createElement('option');
+    o.value = it[valKey];
+    o.textContent = it[lblKey] || it.name || it.nepali_name || '';
+    sel.appendChild(o);
+  });
+}
+
+async function buildLocLabel(loc) {
+  const parts = [];
+  if (loc.area_id) parts.push('Area: '+loc.area_id);
+  if (loc.ward_id && loc.local_level_id) {
+    const ws = await fetch(`/api/locations/wards?local_level_id=${loc.local_level_id}`).then(r=>r.json()).catch(()=>[]);
+    const w = ws.find(x=>x.id==loc.ward_id);
+    if (w) parts.push('Ward '+w.ward_number);
+  }
+  if (loc.local_level_id && loc.district_id) {
+    const ls = await fetch(`/api/locations/local-levels?district_id=${loc.district_id}`).then(r=>r.json()).catch(()=>[]);
+    const l = ls.find(x=>x.id==loc.local_level_id);
+    if (l) parts.push(l.name);
+  }
+  if (loc.district_id && loc.province_id) {
+    const ds = await fetch(`/api/locations/districts?province_id=${loc.province_id}`).then(r=>r.json()).catch(()=>[]);
+    const d = ds.find(x=>x.id==loc.district_id);
+    if (d) parts.push(d.name);
+  }
+  if (loc.province_id && loc.country_id) {
+    const ps = await fetch(`/api/locations/provinces?country_id=${loc.country_id}`).then(r=>r.json()).catch(()=>[]);
+    const p = ps.find(x=>x.id==loc.province_id);
+    if (p) parts.push(p.name);
+  }
+  if (loc.country_id) {
+    const cs = await fetch('/api/locations/countries').then(r=>r.json()).catch(()=>[]);
+    const c = cs.find(x=>x.id==loc.country_id);
+    if (c) parts.push(c.name);
+  }
+  return parts.join(', ');
+}
+
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'alert alert-'+type+' show';
+}
+function clearAlert(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'alert'; el.textContent = '';
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  return new Date(s).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;bottom:1.2rem;right:1.2rem;padding:.6rem 1.1rem;border-radius:10px;font-size:.8rem;background:var(--surface);border:1px solid ${type==='success'?'var(--acc)':type==='error'?'var(--red)':'var(--border)'};color:${type==='success'?'var(--acc)':type==='error'?'var(--red)':'var(--text)'};z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:320px;`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); },3000);
+}
+
+// ── Start ──
+init();
+</script>
+</body>
+</html>

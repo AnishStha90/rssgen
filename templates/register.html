@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register — RSS/gen</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { background: #1a1d27; border: 1px solid #2d3148; border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .logo-text { font-size: 1rem; font-weight: 600; color: #4ade80; letter-spacing: 0.05em; }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.4rem; }
+  .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 2rem; }
+  label { display: block; font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }
+  input, select { width: 100%; background: #0f1117; border: 1px solid #2d3148; border-radius: 8px; padding: 0.75rem 1rem; color: #e2e8f0; font-size: 0.95rem; outline: none; transition: border 0.2s; margin-bottom: 1.2rem; }
+  input:focus, select:focus { border-color: #4ade80; }
+  input.ok  { border-color: #4ade80; }
+  input.bad { border-color: #f87171; }
+  .hint-text { color: #64748b; font-size: 0.78rem; margin: -0.9rem 0 1.2rem 0.1rem; line-height: 1.5; }
+  .pw-checks { list-style: none; margin: -0.8rem 0 1.2rem 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .15rem .5rem; }
+  .pw-checks li { font-size: .72rem; color: #64748b; display: flex; align-items: center; gap: .35rem; }
+  .pw-checks li::before { content: '✗'; color: #f87171; font-weight: 700; font-size: .8rem; }
+  .pw-checks li.pass::before { content: '✓'; color: #4ade80; }
+  .pw-checks li.pass { color: #94a3b8; }
+  .btn { width: 100%; background: #4ade80; color: #0f1117; border: none; border-radius: 8px; padding: 0.85rem; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s; margin-top: 0.5rem; }
+  .btn:hover { background: #22c55e; }
+  .error { background: #3b1a1a; border: 1px solid #7f1d1d; border-radius: 8px; padding: 0.75rem 1rem; color: #fca5a5; font-size: 0.88rem; margin-bottom: 1.2rem; }
+  .footer { text-align: center; margin-top: 1.5rem; font-size: 0.88rem; color: #64748b; }
+  .footer a { color: #4ade80; text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+  .role-note { background: #1e2a3a; border: 1px solid #2d4258; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #93c5fd; }
+  .otp-box { background: #0f1117; border: 1px solid #2d3148; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.2rem; text-align: center; }
+  .otp-box .otp-icon { font-size: 2rem; margin-bottom: .5rem; }
+  .otp-box .otp-title { font-size: 1rem; font-weight: 700; color: #4ade80; margin-bottom: .3rem; }
+  .otp-box .otp-sub { font-size: .8rem; color: #64748b; }
+  .otp-input { font-size: 1.5rem !important; letter-spacing: .5em; text-align: center; font-weight: 700; }
+  .otp-fallback { background: #2d1f00; border: 2px solid #f59e0b; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.2rem; text-align: center; }
+  .otp-display { font-size: 2.2rem; font-weight: 900; letter-spacing: .6em; color: #fbbf24; font-family: monospace; padding: .4rem 0; }
+  .radio-row { display: flex; gap: .75rem; margin-bottom: 1.2rem; }
+  .radio-opt { flex: 1; display: flex; align-items: center; gap: .4rem; background: #0f1117; border: 1px solid #2d3148; border-radius: 8px; padding: .6rem .85rem; cursor: pointer; font-size: .82rem; color: #94a3b8; transition: border .2s; }
+  .radio-opt input[type=radio] { width: auto; margin: 0; accent-color: #4ade80; }
+  .radio-opt:has(input:checked) { border-color: #4ade80; color: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><div class="logo-dot"></div><span class="logo-text">RSS/gen</span></div>
+
+  {% if step == 'otp' %}
+    <h1>Verify your identity</h1>
+    <p class="subtitle">Enter the 6-digit code we sent you</p>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if fallback_otp %}
+    <div class="otp-fallback">
+      <div style="font-size:.75rem;font-weight:700;color:#fbbf24;margin-bottom:.4rem">⚠ SMTP not configured — your OTP is shown here</div>
+      <div class="otp-display">{{ fallback_otp }}</div>
+      <div style="font-size:.7rem;color:#94a3b8;margin-top:.4rem">Copy this code and paste it below. Ask your admin to set up SMTP in Settings so OTPs are emailed automatically.</div>
+    </div>
+    {% else %}
+    <div class="otp-box">
+      <div class="otp-icon">{% if otp_via == 'phone' %}📱{% else %}📧{% endif %}</div>
+      <div class="otp-title">OTP sent via {{ 'SMS' if otp_via == 'phone' else 'email' }}</div>
+      <div class="otp-sub">Sent to <strong>{{ identifier }}</strong> · Valid for 10 minutes</div>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+      <input type="hidden" name="step" value="otp">
+      <input type="hidden" name="identifier" value="{{ identifier }}">
+      <input type="hidden" name="otp_via" value="{{ otp_via }}">
+
+      <label>Enter OTP</label>
+      <input type="text" name="otp" class="otp-input" placeholder="······" maxlength="6" autocomplete="one-time-code" autofocus required>
+
+      <button type="submit" class="btn">✓ Verify &amp; Create Account</button>
+    </form>
+
+    <div class="footer"><a href="/register">← Start over</a></div>
+
+  {% else %}
+    <h1>Create account</h1>
+    <p class="subtitle">Sign up to submit and manage news items</p>
+    <div class="role-note">New accounts are created with the <strong>reporter</strong> role. An admin can upgrade your access later.</div>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" id="regForm">
+      <input type="hidden" name="step" value="form">
+
+      <label>Username</label>
+      <input type="text" name="username" id="f-username" placeholder="your_username" autocomplete="username" required>
+
+      <label>Gmail Address <span style="color:#f87171">*</span></label>
+      <input type="email" name="email" id="f-email" placeholder="you@gmail.com" autocomplete="email" required>
+      <div class="hint-text" id="email-hint"></div>
+
+      <label>Phone Number <span style="font-size:.7rem;color:#64748b">(optional, for OTP via SMS)</span></label>
+      <input type="tel" name="phone" id="f-phone" placeholder="+977 9812345678" autocomplete="tel">
+      <div class="hint-text" id="phone-hint">International format: +CountryCode number</div>
+
+      <label>Password <span style="color:#f87171">*</span></label>
+      <input type="password" name="password" id="f-password" placeholder="••••••••••••" autocomplete="new-password" required>
+      <ul class="pw-checks" id="pw-checks">
+        <li id="chk-len">At least 12 characters</li>
+        <li id="chk-upper">One uppercase letter</li>
+        <li id="chk-num">One number</li>
+        <li id="chk-special">One special character</li>
+      </ul>
+
+      <label>Receive OTP via</label>
+      <div class="radio-row">
+        <label class="radio-opt">
+          <input type="radio" name="otp_via" value="email" checked> 📧 Email
+        </label>
+        <label class="radio-opt" id="opt-phone-label">
+          <input type="radio" name="otp_via" value="phone" id="otp-via-phone"> 📱 Phone (SMS)
+        </label>
+      </div>
+
+      <button type="submit" class="btn" id="submitBtn">Send OTP &amp; Continue →</button>
+    </form>
+
+    <div class="footer">Already have an account? <a href="/login">Sign in</a></div>
+  {% endif %}
+</div>
+
+<script>
+// Password strength checks
+const pwInput  = document.getElementById('f-password');
+const emailInput = document.getElementById('f-email');
+const phoneInput = document.getElementById('f-phone');
+const phoneOpt = document.getElementById('otp-via-phone');
+
+function checkPw() {
+  const v = pwInput ? pwInput.value : '';
+  const set = (id, pass) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('pass', pass);
+  };
+  set('chk-len',     v.length >= 12);
+  set('chk-upper',   /[A-Z]/.test(v));
+  set('chk-num',     /[0-9]/.test(v));
+  set('chk-special', /[^A-Za-z0-9]/.test(v));
+}
+
+function checkEmail() {
+  if (!emailInput) return;
+  const v = emailInput.value.trim();
+  const hint = document.getElementById('email-hint');
+  if (!v) { emailInput.className=''; if(hint)hint.textContent=''; return; }
+  if (/^[a-zA-Z0-9._%+\-]+@gmail\.com$/.test(v)) {
+    emailInput.classList.add('ok'); emailInput.classList.remove('bad');
+    if(hint){hint.textContent='✓ Valid Gmail address'; hint.style.color='#4ade80';}
+  } else {
+    emailInput.classList.add('bad'); emailInput.classList.remove('ok');
+    if(hint){hint.textContent='Must be a @gmail.com address'; hint.style.color='#f87171';}
+  }
+}
+
+function checkPhone() {
+  if (!phoneInput) return;
+  const v = phoneInput.value.trim().replace(/[\s\-]/g,'');
+  const hint = document.getElementById('phone-hint');
+  if (!v) { phoneInput.className=''; return; }
+  if (/^\+[1-9]\d{6,14}$/.test(v)) {
+    phoneInput.classList.add('ok'); phoneInput.classList.remove('bad');
+    if(hint){hint.textContent='✓ Valid phone number'; hint.style.color='#4ade80';}
+  } else {
+    phoneInput.classList.add('bad'); phoneInput.classList.remove('ok');
+    if(hint){hint.textContent='Use international format: +CountryCode number (e.g. +977 9812345678)'; hint.style.color='#f87171';}
+  }
+}
+
+if(pwInput)    pwInput.addEventListener('input', checkPw);
+if(emailInput) emailInput.addEventListener('input', checkEmail);
+if(phoneInput) phoneInput.addEventListener('input', checkPhone);
+
+// Disable phone OTP option if no phone entered
+if(phoneOpt && phoneInput) {
+  function syncPhoneOpt() {
+    const hasPhone = phoneInput.value.trim().length > 0;
+    phoneOpt.disabled = !hasPhone;
+    document.getElementById('opt-phone-label').style.opacity = hasPhone ? '1' : '.4';
+    if (!hasPhone && phoneOpt.checked) {
+      document.querySelector('input[name=otp_via][value=email]').checked = true;
+    }
+  }
+  phoneInput.addEventListener('input', syncPhoneOpt);
+  syncPhoneOpt();
+}
+
+// OTP digit auto-focus
+const otpInput = document.querySelector('.otp-input');
+if(otpInput) {
+  otpInput.addEventListener('input', function() {
+    if(this.value.length === 6) this.form.submit();
+  });
+}
+</script>
+</body>
+</html>
